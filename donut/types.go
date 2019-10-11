@@ -116,13 +116,13 @@ type DonutInstance struct {
 	Hash [64]uint64 // holds up to 64 api hashes/addrs {api}
 
 	// everything from here is encrypted
-	ApiCount int                     // the 64-bit hashes of API required for instance to work
-	DllCount int                     // the number of DLL to load before resolving API
+	ApiCount uint32                  // the 64-bit hashes of API required for instance to work
+	DllCount uint32                  // the number of DLL to load before resolving API
 	DllName  [DONUT_MAX_DLL][32]byte // a list of DLL strings to load
 
 	s [8]byte // amsi.dll
 
-	bypass         int      // indicates behaviour of byassing AMSI/WLDP
+	bypass         uint32   // indicates behaviour of byassing AMSI/WLDP
 	clr            [8]byte  // clr.dll
 	wldp           [16]byte // wldp.dll
 	wldpQuery      [32]byte // WldpQueryDynamicCodeTrust
@@ -159,7 +159,7 @@ type DonutInstance struct {
 	xIID_IXMLDOMDocument uuid.UUID
 	xIID_IXMLDOMNode     uuid.UUID
 
-	Type int // DONUT_INSTANCE_PIC or DONUT_INSTANCE_URL
+	Type uint32 // DONUT_INSTANCE_PIC or DONUT_INSTANCE_URL
 
 	Url [DONUT_MAX_URL]byte // staging server hosting donut module
 	Req [8]byte             // just a buffer for "GET"

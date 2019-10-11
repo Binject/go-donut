@@ -71,9 +71,9 @@ func BytesToUint32s(inbytes []byte) []uint32 {
 
 // Encrypt - encrypt/decrypt data in counter mode
 func Encrypt(mk []byte, ctr []byte, data []byte, length uint32) []byte {
-	var x []byte   //todo: verify this is always CipherBlockLen
-	p := uint32(0) // data index
-	c := uint32(0) // ctr index
+	x := make([]byte, CipherBlockLen) //todo: verify this is always CipherBlockLen
+	p := uint32(0)                    // data index
+	c := uint32(0)                    // ctr index
 
 	for length > 0 {
 		// copy counter+nonce to local buffer
@@ -99,8 +99,8 @@ func Encrypt(mk []byte, ctr []byte, data []byte, length uint32) []byte {
 
 		// update counter
 		for i := CipherBlockLen; i > 0; i-- {
-			c++
-			if ctr[c+i-1] != 0 {
+			ctr[i-1]++
+			if ctr[i-1] != 0 {
 				break
 			}
 		}

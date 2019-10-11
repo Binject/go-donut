@@ -12,10 +12,13 @@ import (
 func main() {
 
 	var srcFile, dstFile, url, archStr string
+	var noCrypto bool
+
 	flag.StringVar(&srcFile, "i", "", "Input file (source)")
 	flag.StringVar(&url, "u", "", "Input URL (source)") // ie. file:///C:/Windows//System32//calc.exe
 	flag.StringVar(&dstFile, "o", "payload.bin", "Output file (payload)")
 	flag.StringVar(&archStr, "a", "x84", "Architecture: x32, x64, or x84 (x32+x64)")
+	flag.BoolVar(&noCrypto, "nocrypto", false, "UNSAFE! Disables all crypto and randomness for testing only")
 	flag.Parse()
 
 	var donutArch donut.DonutArch
@@ -30,17 +33,21 @@ func main() {
 		log.Fatal("Unknown architecture provided")
 	}
 
+	config := new(donut.DonutConfig)
+	config.Arch = donutArch
+	config.NoCrypto = noCrypto
+
 	var err error
 	if srcFile == "" {
 		if url == "" {
 			log.Fatal("No source URL or file provided")
 		}
-		payload, err := donut.ShellcodeFromURL(url, &donut.DonutConfig{Arch: donutArch})
+		payload, err := donut.ShellcodeFromURL(url, config)
 		if err == nil {
 			err = ioutil.WriteFile(dstFile, payload.Bytes(), 0440)
 		}
 	} else {
-		payload, err := donut.ShellcodeFromFile(srcFile, &donut.DonutConfig{Arch: donutArch})
+		payload, err := donut.ShellcodeFromFile(srcFile, config)
 		if err == nil {
 			err = ioutil.WriteFile(dstFile, payload.Bytes(), 0440)
 		}

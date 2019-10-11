@@ -28,6 +28,7 @@ func ShellcodeFromURL(fileURL string, config *DonutConfig) (*bytes.Buffer, error
 	if err != nil {
 		return nil, err
 	}
+	// todo: set things up in config
 	return ShellcodeFromBytes(buf, config)
 }
 
@@ -241,7 +242,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 			inst.Hash[cnt])
 	}
 	// save how many API to resolve
-	inst.ApiCount = len(api_imports)
+	inst.ApiCount = uint32(len(api_imports))
 	inst.DllCount = 0
 	copy(inst.DllName[inst.DllCount][:], []byte("ole32.dll"))
 	inst.DllCount++
@@ -310,7 +311,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	copy(inst.wldpIsApproved[:], "WldpIsClassInApprovedList")
 
 	// set the type of instance we're creating
-	inst.Type = int(config.InstType)
+	inst.Type = uint32(int(config.InstType))
 
 	// if the module will be downloaded
 	// set the URL parameter and request verb
@@ -346,29 +347,30 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 			log.Println("encrypting instance")
 			inst.mac = Maru(inst.sig[:], inst.Iv[:])
 
-			b := bytes.NewBuffer([]byte{})
-			w := bufio.NewWriter(b)
-			binary.Write(w, binary.LittleEndian, *inst)
-			binary.Write(w, binary.LittleEndian, config.ModuleData)
-			w.Flush()
+			b := new(bytes.Buffer)
+			if err := binary.Write(b, binary.LittleEndian, *inst); err != nil {
+				log.Fatal(err)
+			}
+			if _, err := config.ModuleData.WriteTo(b); err != nil {
+				log.Fatal(err)
+			}
+			instData := b.Bytes()
 
 			offset := 4 + // Len uint32
 				CipherKeyLen + CipherBlockLen + // Instance Crypt
 				8 + // IV
 				64 // Hash
 
-			instData := b.Bytes()
 			encInstData := Encrypt(
 				inst.Key.Mk[:],
 				inst.Key.Ctr[:],
 				instData[offset:],
 				uint32(len(instData))-offset)
-			b = bytes.NewBuffer([]byte{})
-			w = bufio.NewWriter(b)
-			binary.Write(w, binary.LittleEndian, instData[:offset])
-			binary.Write(w, binary.LittleEndian, encInstData)
+			var bc bytes.Buffer
+			binary.Write(&bc, binary.LittleEndian, instData[:offset])
+			binary.Write(&bc, binary.LittleEndian, encInstData)
 			log.Println("Leaving.")
-			return b, nil
+			return &bc, nil
 		}
 	}
 
