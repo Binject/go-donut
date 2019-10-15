@@ -2,6 +2,8 @@ package donut
 
 import (
 	"bytes"
+	"encoding/binary"
+	"io"
 
 	"github.com/google/uuid"
 )
@@ -51,13 +53,13 @@ const (
 type ModuleType int
 
 const (
-	DONUT_MODULE_NET_DLL ModuleType = iota // .NET DLL. Requires class and method
-	DONUT_MODULE_NET_EXE                   // .NET EXE. Executes Main if no class and method provided
-	DONUT_MODULE_DLL                       // Unmanaged DLL, function is optional
-	DONUT_MODULE_EXE                       // Unmanaged EXE
-	DONUT_MODULE_VBS                       // VBScript
-	DONUT_MODULE_JS                        // JavaScript or JScript
-	DONUT_MODULE_XSL                       // XSL with JavaScript/JScript or VBscript embedded
+	DONUT_MODULE_NET_DLL ModuleType = 1 // .NET DLL. Requires class and method
+	DONUT_MODULE_NET_EXE            = 2 // .NET EXE. Executes Main if no class and method provided
+	DONUT_MODULE_DLL                = 3 // Unmanaged DLL, function is optional
+	DONUT_MODULE_EXE                = 4 // Unmanaged EXE
+	DONUT_MODULE_VBS                = 5 // VBScript
+	DONUT_MODULE_JS                 = 6 // JavaScript or JScript
+	DONUT_MODULE_XSL                = 7 // XSL with JavaScript/JScript or VBscript embedded
 )
 
 type InstanceType int
@@ -91,17 +93,32 @@ type DonutConfig struct {
 }
 
 type DonutModule struct {
-	Type       uint32                                  // EXE, DLL, JS, VBS, XSL
-	Runtime    [DONUT_MAX_NAME]uint16                  // runtime version for .NET EXE/DLL
+	ModType    uint32                                  // EXE, DLL, JS, VBS, XSL
+	Runtime    [DONUT_MAX_NAME]uint16                  // runtime version for .NET EXE/DLL (donut max name = 256)
 	Domain     [DONUT_MAX_NAME]uint16                  // domain name to use for .NET EXE/DLL
 	Cls        [DONUT_MAX_NAME]uint16                  // name of class and optional namespace for .NET EXE/DLL
 	Method     [DONUT_MAX_NAME * 2]byte                // name of method to invoke for .NET DLL or api for unmanaged DLL
 	ParamCount uint32                                  // number of parameters for DLL/EXE
-	Param      [DONUT_MAX_PARAM][DONUT_MAX_NAME]uint16 // string parameters for DLL/EXE
+	Param      [DONUT_MAX_PARAM][DONUT_MAX_NAME]uint16 // string parameters for DLL/EXE (donut max parm = 8)
 	Sig        [DONUT_MAX_NAME]byte                    // random string to verify decryption
 	Mac        uint64                                  // to verify decryption was ok
 	Len        uint64                                  // size of EXE/DLL/XSL/JS/VBS file
 	Data       [4]byte                                 // data of EXE/DLL/XSL/JS/VBS file
+}
+
+func (mod *DonutModule) WriteTo(w io.Writer) {
+	binary.Write(w, binary.LittleEndian, mod.ModType)
+	binary.Write(w, binary.LittleEndian, mod.Runtime)
+	binary.Write(w, binary.LittleEndian, mod.Domain)
+	binary.Write(w, binary.LittleEndian, mod.Cls)
+	binary.Write(w, binary.LittleEndian, mod.Method)
+	binary.Write(w, binary.LittleEndian, mod.ParamCount)
+	binary.Write(w, binary.LittleEndian, mod.Param)
+	binary.Write(w, binary.LittleEndian, mod.Sig)
+	binary.Write(w, binary.LittleEndian, mod.Mac)
+	binary.Write(w, binary.LittleEndian, mod.Len)
+	binary.Write(w, binary.LittleEndian, mod.Data)
+	binary.Write(w, binary.LittleEndian, []byte{0, 0, 0, 0}) // pad to 6432 bytes
 }
 
 type DonutCrypt struct {
@@ -120,60 +137,61 @@ type DonutInstance struct {
 	DllCount uint32                  // the number of DLL to load before resolving API
 	DllName  [DONUT_MAX_DLL][32]byte // a list of DLL strings to load
 
-	s [8]byte // amsi.dll
+	S [8]byte // amsi.dll
 
-	bypass         uint32   // indicates behaviour of byassing AMSI/WLDP
-	clr            [8]byte  // clr.dll
-	wldp           [16]byte // wldp.dll
-	wldpQuery      [32]byte // WldpQueryDynamicCodeTrust
-	wldpIsApproved [32]byte // WldpIsClassInApprovedList
-	amsiInit       [16]byte // AmsiInitialize
-	amsiScanBuf    [16]byte // AmsiScanBuffer
-	amsiScanStr    [16]byte // AmsiScanString
+	Bypass         uint32   // indicates behaviour of byassing AMSI/WLDP
+	Clr            [8]byte  // clr.dll
+	Wldp           [16]byte // wldp.dll
+	WldpQuery      [32]byte // WldpQueryDynamicCodeTrust
+	WldpIsApproved [32]byte // WldpIsClassInApprovedList
+	AmsiInit       [16]byte // AmsiInitialize
+	AmsiScanBuf    [16]byte // AmsiScanBuffer
+	AmsiScanStr    [16]byte // AmsiScanString
 
-	wscript     [8]uint16  // WScript
-	wscript_exe [16]uint16 // wscript.exe
+	Wscript     [8]uint16  // WScript
+	Wscript_exe [16]uint16 // wscript.exe
 
-	xIID_IUnknown  uuid.UUID
-	xIID_IDispatch uuid.UUID
+	XIID_IUnknown  uuid.UUID
+	XIID_IDispatch uuid.UUID
 
 	//  GUID required to load .NET assemblies
-	xCLSID_CLRMetaHost    uuid.UUID
-	xIID_ICLRMetaHost     uuid.UUID
-	xIID_ICLRRuntimeInfo  uuid.UUID
-	xCLSID_CorRuntimeHost uuid.UUID
-	xIID_ICorRuntimeHost  uuid.UUID
-	xIID_AppDomain        uuid.UUID
+	XCLSID_CLRMetaHost    uuid.UUID
+	XIID_ICLRMetaHost     uuid.UUID
+	XIID_ICLRRuntimeInfo  uuid.UUID
+	XCLSID_CorRuntimeHost uuid.UUID
+	XIID_ICorRuntimeHost  uuid.UUID
+	XIID_AppDomain        uuid.UUID
 
 	//  GUID required to run VBS and JS files
-	xCLSID_ScriptLanguage        uuid.UUID // vbs or js
-	xIID_IHost                   uuid.UUID // wscript object
-	xIID_IActiveScript           uuid.UUID // engine
-	xIID_IActiveScriptSite       uuid.UUID // implementation
-	xIID_IActiveScriptSiteWindow uuid.UUID // basic GUI stuff
-	xIID_IActiveScriptParse32    uuid.UUID // parser
-	xIID_IActiveScriptParse64    uuid.UUID
+	XCLSID_ScriptLanguage        uuid.UUID // vbs or js
+	XIID_IHost                   uuid.UUID // wscript object
+	XIID_IActiveScript           uuid.UUID // engine
+	XIID_IActiveScriptSite       uuid.UUID // implementation
+	XIID_IActiveScriptSiteWindow uuid.UUID // basic GUI stuff
+	XIID_IActiveScriptParse32    uuid.UUID // parser
+	XIID_IActiveScriptParse64    uuid.UUID
 
 	//  GUID required to run XSL files
-	xCLSID_DOMDocument30 uuid.UUID
-	xIID_IXMLDOMDocument uuid.UUID
-	xIID_IXMLDOMNode     uuid.UUID
+	XCLSID_DOMDocument30 uuid.UUID
+	XIID_IXMLDOMDocument uuid.UUID
+	XIID_IXMLDOMNode     uuid.UUID
 
 	Type uint32 // DONUT_INSTANCE_PIC or DONUT_INSTANCE_URL
 
 	Url [DONUT_MAX_URL]byte // staging server hosting donut module
 	Req [8]byte             // just a buffer for "GET"
 
-	sig [DONUT_MAX_NAME]byte // string to hash
-	mac uint64               // to verify decryption ok
+	Sig [DONUT_MAX_NAME]byte // string to hash
+	Mac uint64               // to verify decryption ok
 
-	mod_key DonutCrypt // used to decrypt module
-	mod_len uint64     // total size of module
+	Mod_key DonutCrypt // used to decrypt module
+	Mod_len uint64     // total size of module
 
 	/*  union {
 	    PDONUT_MODULE p;         // for URL
 	    DONUT_MODULE  x;         // for PIC
 	  } module; */
+	Mod DonutModule
 }
 
 type API_IMPORT struct {

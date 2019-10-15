@@ -4,6 +4,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/Binject/go-donut/donut"
@@ -36,6 +37,7 @@ func main() {
 	config := new(donut.DonutConfig)
 	config.Arch = donutArch
 	config.NoCrypto = noCrypto
+	config.InstType = donut.DONUT_INSTANCE_PIC //todo: add URL CLI options
 
 	var err error
 	if srcFile == "" {
@@ -44,12 +46,20 @@ func main() {
 		}
 		payload, err := donut.ShellcodeFromURL(url, config)
 		if err == nil {
-			err = ioutil.WriteFile(dstFile, payload.Bytes(), 0440)
+			err = ioutil.WriteFile(dstFile, payload.Bytes(), 0644)
 		}
 	} else {
 		payload, err := donut.ShellcodeFromFile(srcFile, config)
 		if err == nil {
-			err = ioutil.WriteFile(dstFile, payload.Bytes(), 0440)
+			f, err := os.Create("test.txt")
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer f.Close()
+			if _, err = payload.WriteTo(f); err != nil {
+				log.Fatal(err)
+			}
+			//err = ioutil.WriteFile(dstFile, payload.Bytes(), 0)
 		}
 	}
 	if err != nil {

@@ -70,10 +70,11 @@ func BytesToUint32s(inbytes []byte) []uint32 {
 }
 
 // Encrypt - encrypt/decrypt data in counter mode
-func Encrypt(mk []byte, ctr []byte, data []byte, length uint32) []byte {
+func Encrypt(mk []byte, ctr []byte, data []byte, length uint32) *bytes.Buffer {
 	x := make([]byte, CipherBlockLen) //todo: verify this is always CipherBlockLen
 	p := uint32(0)                    // data index
 	c := uint32(0)                    // ctr index
+	retval := new(bytes.Buffer)
 
 	for length > 0 {
 		// copy counter+nonce to local buffer
@@ -104,20 +105,21 @@ func Encrypt(mk []byte, ctr []byte, data []byte, length uint32) []byte {
 				break
 			}
 		}
+		binary.Write(retval, binary.LittleEndian, x)
 	}
-	return x
+	return retval
 }
 
 // Speck 64/128
 func Speck(mk []byte, p uint64) uint64 {
 	w := make([]uint32, 2)
-	var buf []byte
-	binary.LittleEndian.PutUint64(buf, p)
-	r := bytes.NewReader(buf)
-	binary.Read(r, binary.LittleEndian, &w[0])
-	binary.Read(r, binary.LittleEndian, &w[1])
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, p)
+	binary.Read(buf, binary.LittleEndian, &w[0])
+	binary.Read(buf, binary.LittleEndian, &w[1])
 	k := make([]uint32, 4)
-	r = bytes.NewReader(mk)
+
+	r := bytes.NewBuffer(mk)
 	for c := 0; c < 4; c++ {
 		binary.Read(r, binary.LittleEndian, &k[c])
 	}
@@ -150,11 +152,13 @@ func Maru(input []byte, iv []byte) uint64 { // todo: iv and return must be 8 byt
 	h := binary.LittleEndian.Uint64(iv)
 	b := make([]byte, MARU_BLK_LEN)
 
-	idx := 0
-	len := 0
-	for end := 0; end != 0; {
+	idx, length, end := 0, 0, 0
+	for {
+		if end > 0 {
+			break
+		}
 		// end of string or max len?
-		if input[len] == 0 || len == MARU_MAX_STR {
+		if length == len(input) || input[length] == 0 || length == MARU_MAX_STR {
 			// zero remainder of M
 			for j := idx; j < MARU_BLK_LEN-idx; j++ {
 				b[j] = 0
@@ -169,14 +173,14 @@ func Maru(input []byte, iv []byte) uint64 { // todo: iv and return must be 8 byt
 				b = make([]byte, MARU_BLK_LEN)
 			}
 			// store total length in bits
-			binary.LittleEndian.PutUint32(b[MARU_BLK_LEN-4:], uint32(len)*8)
+			binary.LittleEndian.PutUint32(b[MARU_BLK_LEN-4:], uint32(length)*8)
 			idx = MARU_BLK_LEN
 			end++
 		} else {
 			// store character from api string
-			b[idx] = input[len]
+			b[idx] = input[length]
 			idx++
-			len++
+			length++
 		}
 		if idx == MARU_BLK_LEN {
 			// update H with E

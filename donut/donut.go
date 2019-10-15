@@ -1,7 +1,6 @@
 package donut
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -40,17 +39,17 @@ func ShellcodeFromFile(filename string, config *DonutConfig) (*bytes.Buffer, err
 		return nil, err
 	}
 	switch strings.ToLower(filepath.Ext(filename)) {
-	case "exe":
+	case ".exe":
 		config.Type = DONUT_MODULE_EXE
 		// todo: how to tell .NET or not?
-	case "dll":
-		config.Type = DONUT_MODULE_EXE
+	case ".dll":
+		config.Type = DONUT_MODULE_DLL
 		// todo: how to tell .NET or not?
-	case "xsl":
+	case ".xsl":
 		config.Type = DONUT_MODULE_XSL
-	case "js":
+	case ".js":
 		config.Type = DONUT_MODULE_JS
-	case "vbs":
+	case ".vbs":
 		config.Type = DONUT_MODULE_VBS
 	}
 	return ShellcodeFromBytes(bytes.NewBuffer(b), config)
@@ -66,8 +65,9 @@ func ShellcodeFromBytes(buf *bytes.Buffer, config *DonutConfig) (*bytes.Buffer, 
 	if err != nil {
 		return nil, err
 	}
+
 	// todo: all of this is a bit coupled
-	return instance, nil
+	return Sandwich(config.Arch, instance)
 }
 
 // Sandwich - adds the donut prefix in the beginning (stomps DOS header), then payload, then donut stub at the end
@@ -81,35 +81,38 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 		             x+1:  stub preamble + stub (either 32 or 64 bit or both)
 	*/
 
-	buf := bytes.NewBuffer([]byte{})
-	w := bufio.NewWriter(buf)
-	byteOrder := binary.LittleEndian // Windows is always Little Endian
+	w := new(bytes.Buffer)
 	instanceLen := uint32(payload.Len())
-
-	binary.Write(w, byteOrder, 0xE8)
-	binary.Write(w, byteOrder, instanceLen)
-	binary.Write(w, byteOrder, payload.Bytes())
-	binary.Write(w, byteOrder, 0x59)
+	w.WriteByte(0xE8)
+	binary.Write(w, binary.LittleEndian, instanceLen)
+	if _, err := payload.WriteTo(w); err != nil {
+		return nil, err
+	}
+	w.WriteByte(0x59)
 
 	switch arch {
 	case X32:
-		binary.Write(w, byteOrder, []byte{0x5A, 0x51, 0x52}) // preamble: pop edx, push ecx, push edx
-		binary.Write(w, byteOrder, PayloadEXEx32)
+		w.WriteByte(0x5A) // preamble: pop edx, push ecx, push edx
+		w.WriteByte(0x51)
+		w.WriteByte(0x52)
+		w.Write(PayloadEXEx32)
 	case X64:
-		binary.Write(w, byteOrder, PayloadEXEx64)
+		w.Write(PayloadEXEx64)
 	case X84:
-		binary.Write(w, byteOrder, []byte{0x31, 0xC0, // preamble: xor eax,eax
-			0x48,        // dec ecx
-			0x0F, 0x88}) // js dword x86_code (skips length of x64 code)
-		binary.Write(w, byteOrder, uint32(len(PayloadEXEx64)))
-		binary.Write(w, byteOrder, PayloadEXEx64)
-		binary.Write(w, byteOrder, []byte{0x5A, // in between 32/64 stubs: pop edx
+		w.WriteByte(0x31) // preamble: xor eax,eax
+		w.WriteByte(0xC0)
+		w.WriteByte(0x48) // dec ecx
+		w.WriteByte(0x0F) // js dword x86_code (skips length of x64 code)
+		w.WriteByte(0x88)
+		///binary.Write(w, binary.LittleEndian, uint32(len(PayloadEXEx64)))
+		w.Write(PayloadEXEx64)
+
+		w.Write([]byte{0x5A, // in between 32/64 stubs: pop edx
 			0x51,  // push ecx
 			0x52}) // push edx
-		binary.Write(w, byteOrder, PayloadEXEx32)
+		w.Write(PayloadEXEx32)
 	}
-	w.Flush()
-	return buf, nil
+	return w, nil
 }
 
 // CreateModule - Creates the Donut Module from Config
@@ -155,6 +158,9 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 		copy(mod.Method[:], []byte(config.Method))
 	}
 
+	mod.ModType = uint32(config.Type)
+	mod.Len = uint64(inputFile.Len())
+
 	if config.Parameters != "" {
 		params := strings.FieldsFunc(config.Parameters, func(r rune) bool { return r == ',' || r == ';' })
 		for i, p := range params {
@@ -171,9 +177,16 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 			mod.ParamCount = uint32(i)
 		}
 	}
-	// read module into memory
-	config.ModuleData = inputFile
 
+	// read module into memory
+	b := new(bytes.Buffer)
+	mod.WriteTo(b)
+	config.ModuleData = b
+	/*
+		bt := new(bytes.Buffer)
+		mod.WriteTo(bt)
+		log.Println(bt.Bytes())
+	*/
 	// update configuration with pointer to module
 	config.Module = mod
 	return nil
@@ -184,13 +197,18 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 	inst := new(DonutInstance)
 
+	inst.Mod = *config.Module
+
 	log.Println("Entering")
-	instLen := uint32(binary.Size(inst))
+	instLen := uint32(binary.Size(*inst))
+	modLen := uint32(config.ModuleData.Len()) + uint32(inst.Mod.Len)
+	//instLen := uint32(8264) //todo: that's how big it is in the C version...
+
 	// if this is a PIC instance, add the size of module
 	// that will be appended to the end of structure
 	if config.InstType == DONUT_INSTANCE_PIC {
-		log.Printf("The size of module is %v bytes. Adding to size of instance.\n", config.ModuleData.Len())
-		instLen += uint32(config.ModuleData.Len())
+		log.Printf("The size of module is %v bytes. Adding to size of instance.\n", modLen)
+		instLen += modLen
 	}
 
 	if !config.NoCrypto {
@@ -210,22 +228,22 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		if err != nil {
 			return nil, err
 		}
-		copy(inst.mod_key.Mk[:], tk)
+		copy(inst.Mod_key.Mk[:], tk)
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
 		}
-		copy(inst.mod_key.Ctr[:], tk)
+		copy(inst.Mod_key.Ctr[:], tk)
 		log.Println("Generating random string to verify decryption")
 		sbsig := RandomString(DONUT_SIG_LEN)
-		copy(inst.sig[:], []byte(sbsig))
+		copy(inst.Sig[:], []byte(sbsig))
+		log.Println("Generating random IV for Maru hash")
+		iv, err := GenerateRandomBytes(MARU_IV_LEN)
+		if err != nil {
+			return nil, err
+		}
+		copy(inst.Iv[:], []byte(iv))
 	}
-	log.Println("Generating random IV for Maru hash")
-	iv, err := GenerateRandomBytes(MARU_IV_LEN)
-	if err != nil {
-		return nil, err
-	}
-	copy(inst.Iv[:], []byte(iv))
 	log.Println("Generating hashes for API using IV:", inst.Iv)
 
 	for cnt, c := range api_imports {
@@ -258,57 +276,57 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		config.Type == DONUT_MODULE_NET_EXE {
 		log.Println("Copying GUID structures and DLL strings for loading .NET assemblies")
 
-		copy(inst.xIID_AppDomain[:], xIID_AppDomain[:])
-		copy(inst.xIID_ICLRMetaHost[:], xIID_ICLRMetaHost[:])
-		copy(inst.xCLSID_CLRMetaHost[:], xCLSID_CLRMetaHost[:])
-		copy(inst.xIID_ICLRRuntimeInfo[:], xIID_ICLRRuntimeInfo[:])
-		copy(inst.xIID_ICorRuntimeHost[:], xIID_ICorRuntimeHost[:])
-		copy(inst.xCLSID_CorRuntimeHost[:], xCLSID_CorRuntimeHost[:])
+		copy(inst.XIID_AppDomain[:], xIID_AppDomain[:])
+		copy(inst.XIID_ICLRMetaHost[:], xIID_ICLRMetaHost[:])
+		copy(inst.XCLSID_CLRMetaHost[:], xCLSID_CLRMetaHost[:])
+		copy(inst.XIID_ICLRRuntimeInfo[:], xIID_ICLRRuntimeInfo[:])
+		copy(inst.XIID_ICorRuntimeHost[:], xIID_ICorRuntimeHost[:])
+		copy(inst.XCLSID_CorRuntimeHost[:], xCLSID_CorRuntimeHost[:])
 	} else if config.Type == DONUT_MODULE_VBS ||
 		config.Type == DONUT_MODULE_JS {
 		log.Println("Copying GUID structures and DLL strings for loading VBS/JS")
 
-		copy(inst.xIID_IUnknown[:], xIID_IUnknown[:])
-		copy(inst.xIID_IDispatch[:], xIID_IDispatch[:])
-		copy(inst.xIID_IHost[:], xIID_IHost[:])
-		copy(inst.xIID_IActiveScript[:], xIID_IActiveScript[:])
-		copy(inst.xIID_IActiveScriptSite[:], xIID_IActiveScriptSite[:])
-		copy(inst.xIID_IActiveScriptSiteWindow[:], xIID_IActiveScriptSiteWindow[:])
-		copy(inst.xIID_IActiveScriptParse32[:], xIID_IActiveScriptParse32[:])
-		copy(inst.xIID_IActiveScriptParse64[:], xIID_IActiveScriptParse64[:])
+		copy(inst.XIID_IUnknown[:], xIID_IUnknown[:])
+		copy(inst.XIID_IDispatch[:], xIID_IDispatch[:])
+		copy(inst.XIID_IHost[:], xIID_IHost[:])
+		copy(inst.XIID_IActiveScript[:], xIID_IActiveScript[:])
+		copy(inst.XIID_IActiveScriptSite[:], xIID_IActiveScriptSite[:])
+		copy(inst.XIID_IActiveScriptSiteWindow[:], xIID_IActiveScriptSiteWindow[:])
+		copy(inst.XIID_IActiveScriptParse32[:], xIID_IActiveScriptParse32[:])
+		copy(inst.XIID_IActiveScriptParse64[:], xIID_IActiveScriptParse64[:])
 
 		wstr := utf16.Encode([]rune("WScript"))
 		for j, r := range wstr {
-			inst.wscript[j] = r
+			inst.Wscript[j] = r
 		}
 		wstr = utf16.Encode([]rune("wscript.exe"))
 		for j, r := range wstr {
-			inst.wscript_exe[j] = r
+			inst.Wscript_exe[j] = r
 		}
 
 		if config.Type == DONUT_MODULE_VBS {
-			copy(inst.xCLSID_ScriptLanguage[:], xCLSID_VBScript[:])
+			copy(inst.XCLSID_ScriptLanguage[:], xCLSID_VBScript[:])
 		} else {
-			copy(inst.xCLSID_ScriptLanguage[:], xCLSID_JScript[:])
+			copy(inst.XCLSID_ScriptLanguage[:], xCLSID_JScript[:])
 		}
 	} else if config.Type == DONUT_MODULE_XSL {
 		log.Println("Copying GUID structures for loading XSL to instance")
-		copy(inst.xCLSID_DOMDocument30[:], xCLSID_DOMDocument30[:])
-		copy(inst.xIID_IXMLDOMDocument[:], xIID_IXMLDOMDocument[:])
-		copy(inst.xIID_IXMLDOMNode[:], xIID_IXMLDOMNode[:])
+		copy(inst.XCLSID_DOMDocument30[:], xCLSID_DOMDocument30[:])
+		copy(inst.XIID_IXMLDOMDocument[:], xIID_IXMLDOMDocument[:])
+		copy(inst.XIID_IXMLDOMNode[:], xIID_IXMLDOMNode[:])
 	}
 	// required to disable AMSI
-	copy(inst.s[:], "AMSI")
-	copy(inst.amsiInit[:], "AmsiInitialize")
-	copy(inst.amsiScanBuf[:], "AmsiScanBuffer")
-	copy(inst.amsiScanStr[:], "AmsiScanString")
+	copy(inst.S[:], "AMSI")
+	copy(inst.AmsiInit[:], "AmsiInitialize")
+	copy(inst.AmsiScanBuf[:], "AmsiScanBuffer")
+	copy(inst.AmsiScanStr[:], "AmsiScanString")
 
-	copy(inst.clr[:], "CLR")
+	copy(inst.Clr[:], "CLR")
 
 	// required to disable WLDP
-	copy(inst.wldp[:], "WLDP")
-	copy(inst.wldpQuery[:], "WldpQueryDynamicCodeTrust")
-	copy(inst.wldpIsApproved[:], "WldpIsClassInApprovedList")
+	copy(inst.Wldp[:], "WLDP")
+	copy(inst.WldpQuery[:], "WldpQueryDynamicCodeTrust")
+	copy(inst.WldpIsApproved[:], "WldpIsClassInApprovedList")
 
 	// set the type of instance we're creating
 	inst.Type = uint32(int(config.InstType))
@@ -329,49 +347,53 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		log.Println("Payload will attempt download from:", inst.Url)
 	}
 
-	inst.mod_len = uint64(config.ModuleData.Len())
+	inst.Mod_len = uint64(config.ModuleData.Len())
 	inst.Len = instLen
 	config.inst = inst
 	config.instLen = instLen
 
-	if !config.NoCrypto {
-		if config.InstType == DONUT_INSTANCE_URL {
-			log.Println("encrypting module for download")
-			config.ModuleMac = Maru(inst.sig[:], inst.Iv[:])
-			config.ModuleData = bytes.NewBuffer(Encrypt( //todo: make encrypt work on buffers
-				inst.mod_key.Mk[:],
-				inst.mod_key.Ctr[:],
-				config.ModuleData.Bytes(),
-				uint32(config.ModuleData.Len())))
-		} else { //if config.InstType == DONUT_INSTANCE_PIC
-			log.Println("encrypting instance")
-			inst.mac = Maru(inst.sig[:], inst.Iv[:])
-
-			b := new(bytes.Buffer)
-			if err := binary.Write(b, binary.LittleEndian, *inst); err != nil {
-				log.Fatal(err)
-			}
-			if _, err := config.ModuleData.WriteTo(b); err != nil {
-				log.Fatal(err)
-			}
-			instData := b.Bytes()
-
-			offset := 4 + // Len uint32
-				CipherKeyLen + CipherBlockLen + // Instance Crypt
-				8 + // IV
-				64 // Hash
-
-			encInstData := Encrypt(
-				inst.Key.Mk[:],
-				inst.Key.Ctr[:],
-				instData[offset:],
-				uint32(len(instData))-offset)
-			var bc bytes.Buffer
-			binary.Write(&bc, binary.LittleEndian, instData[:offset])
-			binary.Write(&bc, binary.LittleEndian, encInstData)
-			log.Println("Leaving.")
-			return &bc, nil
+	if config.InstType == DONUT_INSTANCE_URL {
+		log.Println("encrypting module for download")
+		config.ModuleMac = Maru(inst.Sig[:], inst.Iv[:])
+		if config.NoCrypto {
+			return config.ModuleData, nil
 		}
+		config.ModuleData = Encrypt( //todo: make encrypt work on buffers
+			inst.Mod_key.Mk[:],
+			inst.Mod_key.Ctr[:],
+			config.ModuleData.Bytes(),
+			uint32(config.ModuleData.Len()))
+	} else { //if config.InstType == DONUT_INSTANCE_PIC
+		inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
+		b := new(bytes.Buffer)
+		if err := binary.Write(b, binary.LittleEndian, *inst); err != nil {
+			log.Fatal(err)
+		}
+		if _, err := config.ModuleData.WriteTo(b); err != nil {
+			log.Fatal(err)
+		}
+		if config.NoCrypto {
+			return b, nil
+		}
+		log.Println("encrypting instance")
+		instData := b.Bytes()
+		offset := 4 + // Len uint32
+			CipherKeyLen + CipherBlockLen + // Instance Crypt
+			8 + // IV
+			64 // Hash
+
+		encInstData := Encrypt(
+			inst.Key.Mk[:],
+			inst.Key.Ctr[:],
+			instData[offset:],
+			uint32(len(instData))-offset)
+		bc := new(bytes.Buffer)
+		binary.Write(bc, binary.LittleEndian, instData[:offset])
+		if _, err := encInstData.WriteTo(bc); err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Leaving.")
+		return bc, nil
 	}
 
 	return nil, nil
