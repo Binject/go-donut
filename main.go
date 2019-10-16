@@ -51,7 +51,7 @@ func main() {
 	} else {
 		payload, err := donut.ShellcodeFromFile(srcFile, config)
 		if err == nil {
-			f, err := os.Create("test.txt")
+			f, err := os.Create(dstFile)
 			if err != nil {
 				log.Fatal(err)
 			}

@@ -128,7 +128,7 @@ type DonutCrypt struct {
 
 type DonutInstance struct {
 	Len  uint32     // total size of instance
-	Key  DonutCrypt // decrypts instance
+	Key  DonutCrypt // decrypts instance (32 bytes total = 16+16)
 	Iv   [8]byte    // the 64-bit initial value for maru hash
 	Hash [64]uint64 // holds up to 64 api hashes/addrs {api}
 
@@ -187,11 +187,67 @@ type DonutInstance struct {
 	Mod_key DonutCrypt // used to decrypt module
 	Mod_len uint64     // total size of module
 
-	/*  union {
-	    PDONUT_MODULE p;         // for URL
-	    DONUT_MODULE  x;         // for PIC
-	  } module; */
 	Mod DonutModule
+}
+
+func (inst *DonutInstance) WriteTo(w io.Writer) {
+	binary.Write(w, binary.LittleEndian, inst.Len)
+	binary.Write(w, binary.LittleEndian, inst.Key)
+	binary.Write(w, binary.LittleEndian, inst.Iv)
+	binary.Write(w, binary.LittleEndian, inst.Hash)
+
+	binary.Write(w, binary.LittleEndian, inst.ApiCount)
+	binary.Write(w, binary.LittleEndian, inst.DllCount)
+	binary.Write(w, binary.LittleEndian, inst.DllName)
+	binary.Write(w, binary.LittleEndian, inst.S)
+
+	binary.Write(w, binary.LittleEndian, inst.Bypass)
+	binary.Write(w, binary.LittleEndian, inst.Clr)
+	binary.Write(w, binary.LittleEndian, inst.Wldp)
+	binary.Write(w, binary.LittleEndian, inst.WldpQuery)
+	binary.Write(w, binary.LittleEndian, inst.WldpIsApproved)
+
+	binary.Write(w, binary.LittleEndian, inst.AmsiInit)
+	binary.Write(w, binary.LittleEndian, inst.AmsiScanBuf)
+	binary.Write(w, binary.LittleEndian, inst.AmsiScanStr)
+
+	binary.Write(w, binary.LittleEndian, inst.Wscript)
+	binary.Write(w, binary.LittleEndian, inst.Wscript_exe)
+
+	binary.Write(w, binary.LittleEndian, inst.XIID_IUnknown)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IDispatch)
+
+	binary.Write(w, binary.LittleEndian, inst.XCLSID_CLRMetaHost)
+	binary.Write(w, binary.LittleEndian, inst.XIID_ICLRMetaHost)
+	binary.Write(w, binary.LittleEndian, inst.XIID_ICLRRuntimeInfo)
+	binary.Write(w, binary.LittleEndian, inst.XCLSID_CorRuntimeHost)
+	binary.Write(w, binary.LittleEndian, inst.XIID_ICorRuntimeHost)
+	binary.Write(w, binary.LittleEndian, inst.XIID_AppDomain)
+
+	binary.Write(w, binary.LittleEndian, inst.XCLSID_ScriptLanguage)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IHost)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScript)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptSite)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptSiteWindow)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptParse32)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptParse64)
+
+	binary.Write(w, binary.LittleEndian, inst.XCLSID_DOMDocument30)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IXMLDOMDocument)
+	binary.Write(w, binary.LittleEndian, inst.XIID_IXMLDOMNode)
+
+	binary.Write(w, binary.LittleEndian, inst.Type)
+
+	binary.Write(w, binary.LittleEndian, inst.Url)
+	binary.Write(w, binary.LittleEndian, inst.Req)
+
+	binary.Write(w, binary.LittleEndian, inst.Sig)
+	binary.Write(w, binary.LittleEndian, inst.Mac)
+
+	binary.Write(w, binary.LittleEndian, inst.Mod_key)
+	binary.Write(w, binary.LittleEndian, inst.Mod_len)
+
+	inst.Mod.WriteTo(w)
 }
 
 type API_IMPORT struct {

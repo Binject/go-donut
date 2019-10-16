@@ -88,6 +88,10 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 	if _, err := payload.WriteTo(w); err != nil {
 		return nil, err
 	}
+	binary.Write(w, binary.LittleEndian, instanceLen)
+	if _, err := payload.WriteTo(w); err != nil {
+		return nil, err
+	}
 	w.WriteByte(0x59)
 
 	switch arch {
@@ -181,12 +185,9 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 	// read module into memory
 	b := new(bytes.Buffer)
 	mod.WriteTo(b)
+	inputFile.WriteTo(b)
 	config.ModuleData = b
-	/*
-		bt := new(bytes.Buffer)
-		mod.WriteTo(bt)
-		log.Println(bt.Bytes())
-	*/
+
 	// update configuration with pointer to module
 	config.Module = mod
 	return nil
@@ -200,8 +201,14 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	inst.Mod = *config.Module
 
 	log.Println("Entering")
+
+	ib := new(bytes.Buffer)
+	inst.WriteTo(ib)
+
 	instLen := uint32(binary.Size(*inst))
-	modLen := uint32(config.ModuleData.Len()) + uint32(inst.Mod.Len)
+	instLen = uint32(ib.Len())
+
+	modLen := uint32(config.ModuleData.Len()) // ModuleData is mod struct + input file
 	//instLen := uint32(8264) //todo: that's how big it is in the C version...
 
 	// if this is a PIC instance, add the size of module
@@ -347,7 +354,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		log.Println("Payload will attempt download from:", inst.Url)
 	}
 
-	inst.Mod_len = uint64(config.ModuleData.Len())
+	inst.Mod_len = uint64(modLen)
 	inst.Len = instLen
 	config.inst = inst
 	config.instLen = instLen
@@ -358,7 +365,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		if config.NoCrypto {
 			return config.ModuleData, nil
 		}
-		config.ModuleData = Encrypt( //todo: make encrypt work on buffers
+		config.ModuleData = Encrypt( //todo: make encrypt work on buffers?
 			inst.Mod_key.Mk[:],
 			inst.Mod_key.Ctr[:],
 			config.ModuleData.Bytes(),
