@@ -160,7 +160,7 @@ func Maru(input []byte, iv []byte) uint64 { // todo: iv and return must be 8 byt
 		// end of string or max len?
 		if length == len(input) || input[length] == 0 || length == MARU_MAX_STR {
 			// zero remainder of M
-			for j := idx; j < MARU_BLK_LEN-idx; j++ {
+			for j := idx; j < MARU_BLK_LEN; /*-idx*/ j++ {
 				b[j] = 0
 			}
 			// store the end bit

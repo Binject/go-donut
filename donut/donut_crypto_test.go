@@ -2,6 +2,7 @@ package donut
 
 import (
 	"bytes"
+	"log"
 	"testing"
 )
 
@@ -25,6 +26,20 @@ func Test_Chaskey_1(t *testing.T) {
 		t.Log("Chaskey Test Passed")
 	} else {
 		t.Log("Chaskey Test Failed\n", outdata, cipher)
+		t.Fail()
+	}
+}
+
+func Test_Maru_1(t *testing.T) {
+
+	dllHash := Maru([]byte("oleaut32.dll"), []byte{0, 0, 0, 0, 0, 0, 0, 0})
+	hash := Maru([]byte("SafeArrayCreateVector"), []byte{0, 0, 0, 0, 0, 0, 0, 0}) ^ dllHash
+	log.Printf("Hash: %x (dllHash was %x)\n", hash, dllHash)
+
+	if 0xbd77af2569689c8a == hash {
+		t.Log("Maru Test Passed")
+	} else {
+		t.Log("Maru Test Failed\n")
 		t.Fail()
 	}
 }
