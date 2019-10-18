@@ -65,6 +65,8 @@ func ShellcodeFromBytes(buf *bytes.Buffer, config *DonutConfig) (*bytes.Buffer, 
 	if err != nil {
 		return nil, err
 	}
+	// todo debug
+	ioutil.WriteFile("newinst.bin", instance.Bytes(), 0644)
 
 	// todo: all of this is a bit coupled
 	return Sandwich(config.Arch, instance)
@@ -84,10 +86,6 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 	w := new(bytes.Buffer)
 	instanceLen := uint32(payload.Len())
 	w.WriteByte(0xE8)
-	binary.Write(w, binary.LittleEndian, instanceLen)
-	if _, err := payload.WriteTo(w); err != nil {
-		return nil, err
-	}
 	binary.Write(w, binary.LittleEndian, instanceLen)
 	if _, err := payload.WriteTo(w); err != nil {
 		return nil, err
@@ -198,18 +196,18 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 	inst := new(DonutInstance)
 
-	inst.Mod = *config.Module
+	//inst.Mod = *config.Module
 
 	log.Println("Entering")
 
 	ib := new(bytes.Buffer)
 	inst.WriteTo(ib)
 
-	instLen := uint32(binary.Size(*inst))
-	instLen = uint32(ib.Len())
+	//instLen := uint32(binary.Size(*inst))
+	//instLen = uint32(ib.Len())
 
 	modLen := uint32(config.ModuleData.Len()) // ModuleData is mod struct + input file
-	//instLen := uint32(8264) //todo: that's how big it is in the C version...
+	instLen := uint32(8264)                   //todo: that's how big it is in the C version...
 
 	// if this is a PIC instance, add the size of module
 	// that will be appended to the end of structure
@@ -224,23 +222,23 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		if err != nil {
 			return nil, err
 		}
-		copy(inst.Key.Mk[:], tk)
+		copy(inst.KeyMk[:], tk)
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
 		}
-		copy(inst.Key.Ctr[:], tk)
+		copy(inst.KeyCtr[:], tk)
 		log.Println("Generating random key for module")
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
 		}
-		copy(inst.Mod_key.Mk[:], tk)
+		copy(inst.ModKeyMk[:], tk)
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
 		}
-		copy(inst.Mod_key.Ctr[:], tk)
+		copy(inst.ModKeyCtr[:], tk)
 		log.Println("Generating random string to verify decryption")
 		sbsig := RandomString(DONUT_SIG_LEN)
 		copy(inst.Sig[:], []byte(sbsig))
@@ -261,7 +259,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		// xor with DLL hash and store in instance
 		inst.Hash[cnt] = Maru([]byte(c.Name), inst.Iv[:]) ^ dllHash
 
-		log.Printf("Hash for %s : %s = %v\n",
+		log.Printf("Hash for %s : %s = %x\n",
 			c.Module,
 			c.Name,
 			inst.Hash[cnt])
@@ -366,16 +364,16 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 			return config.ModuleData, nil
 		}
 		config.ModuleData = Encrypt( //todo: make encrypt work on buffers?
-			inst.Mod_key.Mk[:],
-			inst.Mod_key.Ctr[:],
+			inst.ModKeyMk[:],
+			inst.ModKeyCtr[:],
 			config.ModuleData.Bytes(),
 			uint32(config.ModuleData.Len()))
 	} else { //if config.InstType == DONUT_INSTANCE_PIC
-		inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
-		b := new(bytes.Buffer)
-		if err := binary.Write(b, binary.LittleEndian, *inst); err != nil {
-			log.Fatal(err)
+		if !config.NoCrypto {
+			inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
 		}
+		b := new(bytes.Buffer)
+		inst.WriteTo(b)
 		if _, err := config.ModuleData.WriteTo(b); err != nil {
 			log.Fatal(err)
 		}
@@ -390,8 +388,8 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 			64 // Hash
 
 		encInstData := Encrypt(
-			inst.Key.Mk[:],
-			inst.Key.Ctr[:],
+			inst.KeyMk[:],
+			inst.KeyCtr[:],
 			instData[offset:],
 			uint32(len(instData))-offset)
 		bc := new(bytes.Buffer)

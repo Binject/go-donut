@@ -3,7 +3,7 @@ package donut
 import (
 	"bytes"
 	"encoding/binary"
-	"io"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -106,29 +106,61 @@ type DonutModule struct {
 	Data       [4]byte                                 // data of EXE/DLL/XSL/JS/VBS file
 }
 
-func (mod *DonutModule) WriteTo(w io.Writer) {
-	binary.Write(w, binary.LittleEndian, mod.ModType)
-	binary.Write(w, binary.LittleEndian, mod.Runtime)
-	binary.Write(w, binary.LittleEndian, mod.Domain)
-	binary.Write(w, binary.LittleEndian, mod.Cls)
-	binary.Write(w, binary.LittleEndian, mod.Method)
-	binary.Write(w, binary.LittleEndian, mod.ParamCount)
-	binary.Write(w, binary.LittleEndian, mod.Param)
-	binary.Write(w, binary.LittleEndian, mod.Sig)
-	binary.Write(w, binary.LittleEndian, mod.Mac)
-	binary.Write(w, binary.LittleEndian, mod.Len)
-	binary.Write(w, binary.LittleEndian, mod.Data)
-	binary.Write(w, binary.LittleEndian, []byte{0, 0, 0, 0}) // pad to 6432 bytes
+func WriteField(w *bytes.Buffer, name string, i interface{}) {
+	align := 8
+	pad := (w.Len() % align)
+	for p := 0; p < pad; p++ {
+		//		w.Write([]byte{0}) // pad with null out to byte alignment
+	}
+	vaddr := w.Len()
+	binary.Write(w, binary.LittleEndian, i)
+	pad2 := (w.Len() % align)
+	for p := 0; p < pad2; p++ {
+		//		w.Write([]byte{0}) // pad with null out to byte alignment
+	}
+	log.Printf("<field> %s\t %x:pad[%d/%d]\n", name, vaddr, pad, pad2)
 }
 
-type DonutCrypt struct {
-	Mk  [CipherKeyLen]byte   // master key
-	Ctr [CipherBlockLen]byte // counter + nonce
+func (mod *DonutModule) WriteTo(w *bytes.Buffer) {
+	log.Println("MODULE", w.Len())
+	baseLen := w.Len()
+	binary.Write(w, binary.LittleEndian, mod.ModType)
+	log.Println("ModType", w.Len(), w.Len()-baseLen)
+
+	binary.Write(w, binary.LittleEndian, mod.Runtime)
+	log.Println("Runtime", w.Len(), w.Len()-baseLen)
+	binary.Write(w, binary.LittleEndian, mod.Domain)
+	log.Println("Domain", w.Len(), w.Len()-baseLen)
+	binary.Write(w, binary.LittleEndian, mod.Cls)
+	log.Println("CLS", w.Len(), w.Len()-baseLen)
+	w.Write(mod.Method[:len(mod.Method)])
+	//binary.Write(w, binary.LittleEndian, mod.Method)
+	log.Println("Method", w.Len(), w.Len()-baseLen)
+
+	binary.Write(w, binary.LittleEndian, mod.ParamCount)
+	log.Println("ParamCount", w.Len(), w.Len()-baseLen)
+	binary.Write(w, binary.LittleEndian, mod.Param)
+	log.Println("Param", w.Len(), w.Len()-baseLen)
+	w.Write(mod.Sig[:len(mod.Sig)])
+	//binary.Write(w, binary.LittleEndian, mod.Sig)
+	log.Println("Sig", w.Len(), w.Len()-baseLen)
+	binary.Write(w, binary.LittleEndian, mod.Mac)
+	log.Println("Mac", w.Len(), w.Len()-baseLen)
+	binary.Write(w, binary.LittleEndian, mod.Len)
+	log.Println("Len", w.Len(), w.Len()-baseLen)
+	//w.Write(mod.Data[:len(mod.Data)])
+	//log.Println("Data", w.Len(), w.Len()-baseLen)
+	//binary.Write(w, binary.LittleEndian, mod.Data)
+	log.Println("final len", w.Len(), w.Len()-baseLen)
 }
 
 type DonutInstance struct {
-	Len  uint32     // total size of instance
-	Key  DonutCrypt // decrypts instance (32 bytes total = 16+16)
+	Len uint32 // total size of instance
+
+	//Key  DonutCrypt // decrypts instance (32 bytes total = 16+16)
+	KeyMk  [CipherKeyLen]byte   // master key
+	KeyCtr [CipherBlockLen]byte // counter + nonce
+
 	Iv   [8]byte    // the 64-bit initial value for maru hash
 	Hash [64]uint64 // holds up to 64 api hashes/addrs {api}
 
@@ -184,70 +216,114 @@ type DonutInstance struct {
 	Sig [DONUT_MAX_NAME]byte // string to hash
 	Mac uint64               // to verify decryption ok
 
-	Mod_key DonutCrypt // used to decrypt module
-	Mod_len uint64     // total size of module
+	ModKeyMk  [CipherKeyLen]byte   // master key
+	ModKeyCtr [CipherBlockLen]byte // counter + nonce
 
-	Mod DonutModule
+	Mod_len uint64 // total size of module
+
+	//Mod DonutModule
 }
 
-func (inst *DonutInstance) WriteTo(w io.Writer) {
-	binary.Write(w, binary.LittleEndian, inst.Len)
-	binary.Write(w, binary.LittleEndian, inst.Key)
-	binary.Write(w, binary.LittleEndian, inst.Iv)
-	binary.Write(w, binary.LittleEndian, inst.Hash)
+func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
+	log.Println("INSTANCE", w.Len())
 
-	binary.Write(w, binary.LittleEndian, inst.ApiCount)
-	binary.Write(w, binary.LittleEndian, inst.DllCount)
-	binary.Write(w, binary.LittleEndian, inst.DllName)
-	binary.Write(w, binary.LittleEndian, inst.S)
+	//binary.Write(w, binary.LittleEndian, inst.Len)
+	WriteField(w, "Len", inst.Len)
+	for i := 0; i < 4; i++ {
+		w.WriteByte(0)
+	}
+	WriteField(w, "KeyMk", inst.KeyMk)
+	WriteField(w, "KeyCtr", inst.KeyCtr)
+	WriteField(w, "Iv", inst.Iv)
 
-	binary.Write(w, binary.LittleEndian, inst.Bypass)
-	binary.Write(w, binary.LittleEndian, inst.Clr)
-	binary.Write(w, binary.LittleEndian, inst.Wldp)
-	binary.Write(w, binary.LittleEndian, inst.WldpQuery)
-	binary.Write(w, binary.LittleEndian, inst.WldpIsApproved)
+	WriteField(w, "Hash", inst.Hash)
+	WriteField(w, "ApiCount", inst.ApiCount)
+	WriteField(w, "DllCount", inst.DllCount)
+	WriteField(w, "DllName", inst.DllName)
+	WriteField(w, "S", inst.S)
+	WriteField(w, "Bypass", inst.Bypass)
+	WriteField(w, "Clr", inst.Clr)
+	WriteField(w, "Wldp", inst.Wldp)
+	WriteField(w, "WldpQuery", inst.WldpQuery)
+	WriteField(w, "WldpIsApproved", inst.WldpIsApproved)
 
 	binary.Write(w, binary.LittleEndian, inst.AmsiInit)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.AmsiScanBuf)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.AmsiScanStr)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.Wscript)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.Wscript_exe)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.XIID_IUnknown)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IDispatch)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.XCLSID_CLRMetaHost)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_ICLRMetaHost)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_ICLRRuntimeInfo)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XCLSID_CorRuntimeHost)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_ICorRuntimeHost)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_AppDomain)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.XCLSID_ScriptLanguage)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IHost)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScript)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptSite)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptSiteWindow)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptParse32)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptParse64)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.XCLSID_DOMDocument30)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IXMLDOMDocument)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IXMLDOMNode)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.Type)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.Url)
+	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.Req)
+	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.Sig)
+	log.Println("len", w.Len())
+
 	binary.Write(w, binary.LittleEndian, inst.Mac)
+	log.Println("len", w.Len())
 
-	binary.Write(w, binary.LittleEndian, inst.Mod_key)
+	binary.Write(w, binary.LittleEndian, inst.ModKeyMk)
+
+	binary.Write(w, binary.LittleEndian, inst.ModKeyCtr)
+	log.Println("len", w.Len())
+
+	//inst.Mod_len = 0xFFFFFFFFFFFFFFFF
 	binary.Write(w, binary.LittleEndian, inst.Mod_len)
+	log.Println("len", w.Len())
 
-	inst.Mod.WriteTo(w)
+	//inst.Mod.WriteTo(w)
+	log.Println("final len", w.Len())
 }
 
 type API_IMPORT struct {
@@ -269,6 +345,7 @@ var api_imports = []API_IMPORT{
 
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreate"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreateVector"},
+
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayPutElement"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayDestroy"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayGetLBound"},
