@@ -225,11 +225,11 @@ type DonutInstance struct {
 }
 
 func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
-	log.Println("INSTANCE", w.Len())
+	start := w.Len()
+	log.Println("INSTANCE", start)
 
-	//binary.Write(w, binary.LittleEndian, inst.Len)
 	WriteField(w, "Len", inst.Len)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 4; i++ { //todo: mystery padding
 		w.WriteByte(0)
 	}
 	WriteField(w, "KeyMk", inst.KeyMk)

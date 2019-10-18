@@ -207,7 +207,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	//instLen = uint32(ib.Len())
 
 	modLen := uint32(config.ModuleData.Len()) // ModuleData is mod struct + input file
-	instLen := uint32(8264)                   //todo: that's how big it is in the C version...
+	instLen := uint32(8312 + 8)               //todo: that's how big it is in the C version...
 
 	// if this is a PIC instance, add the size of module
 	// that will be appended to the end of structure
@@ -376,6 +376,9 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		inst.WriteTo(b)
 		if _, err := config.ModuleData.WriteTo(b); err != nil {
 			log.Fatal(err)
+		}
+		for uint32(b.Len()) < config.instLen {
+			b.WriteByte(0)
 		}
 		if config.NoCrypto {
 			return b, nil
