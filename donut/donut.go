@@ -352,7 +352,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		log.Println("Payload will attempt download from:", inst.Url)
 	}
 
-	inst.Mod_len = uint64(modLen)
+	inst.Mod_len = uint64(modLen) + 8 //todo: this 8 is from alignment I think?
 	inst.Len = instLen
 	config.inst = inst
 	config.instLen = instLen
