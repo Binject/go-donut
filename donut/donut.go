@@ -71,6 +71,13 @@ func ShellcodeFromBytes(buf *bytes.Buffer, config *DonutConfig) (*bytes.Buffer, 
 	if err != nil {
 		return nil, err
 	}
+	// If the module will be stored on a remote server
+	if config.InstType == DONUT_INSTANCE_URL {
+		log.Printf("Saving %s to disk.\n", config.ModuleName)
+		// save the module to disk using random name
+		instance.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0}) // mystery padding
+		ioutil.WriteFile(config.ModuleName, instance.Bytes(), 0644)
+	}
 	//ioutil.WriteFile("newinst.bin", instance.Bytes(), 0644)
 	return Sandwich(config.Arch, instance)
 }
@@ -210,16 +217,8 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 	inst := new(DonutInstance)
-
-	//inst.Mod = *config.Module
-
-	log.Println("Entering")
-
 	ib := new(bytes.Buffer)
 	inst.WriteTo(ib)
-
-	//instLen := uint32(binary.Size(*inst))
-	//instLen = uint32(ib.Len())
 
 	modLen := uint32(config.ModuleData.Len()) // ModuleData is mod struct + input file
 	instLen := uint32(8312 + 8)               //todo: that's how big it is in the C version...
@@ -363,7 +362,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 		// set the request verb
 		copy(inst.Req[:], "GET")
-		log.Println("Payload will attempt download from:", inst.Url)
+		log.Println("Payload will attempt download from:", string(inst.Url[:]))
 	}
 
 	inst.Mod_len = uint64(modLen) + 8 //todo: this 8 is from alignment I think?

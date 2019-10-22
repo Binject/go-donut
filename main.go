@@ -48,7 +48,13 @@ func main() {
 	config := new(donut.DonutConfig)
 	config.Arch = donutArch
 	config.NoCrypto = noCrypto
-	config.InstType = donut.DONUT_INSTANCE_PIC //todo: add URL CLI options
+
+	if url == "" {
+		config.InstType = donut.DONUT_INSTANCE_PIC
+	} else {
+		config.InstType = donut.DONUT_INSTANCE_URL
+	}
+
 	config.DotNetMode = dotNet
 	config.Parameters = params
 	config.Runtime = runtime
