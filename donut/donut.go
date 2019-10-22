@@ -191,7 +191,7 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 			for j, r := range wstr {
 				mod.Param[i][j] = r
 			}
-			mod.ParamCount = uint32(i)
+			mod.ParamCount = uint32(i) + 1
 		}
 	}
 
