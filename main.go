@@ -14,11 +14,12 @@ func main() {
 
 	var srcFile, dstFile, url, archStr, className, methodName, runtime, appDomain, params string
 	var noCrypto, dotNet bool
+	var bypass int
 
 	flag.StringVar(&srcFile, "f", "", ".NET assembly, EXE, DLL, VBS, JS or XSL file to execute in-memory.")
 	flag.StringVar(&url, "u", "", "HTTP server that will host the donut module.")
 	flag.StringVar(&archStr, "a", "x84", "Target Architecture: x32, x64, or x84 (default, x32+x64)")
-	//Bypass AMSI/WLDP : 1=skip, 2=abort on fail, 3=continue on fail.(default)
+	flag.IntVar(&bypass, "b", 3, "Bypass AMSI/WLDP : 1=skip, 2=abort on fail, 3=continue on fail.(default)")
 	flag.StringVar(&dstFile, "o", "payload.bin", "Output file. Default is payload.bin")
 
 	flag.BoolVar(&dotNet, "dotnet", false, ".NET Mode, set true for .NET exe and DLL files (autodetect not implemented)")
@@ -50,6 +51,12 @@ func main() {
 	config.InstType = donut.DONUT_INSTANCE_PIC //todo: add URL CLI options
 	config.DotNetMode = dotNet
 	config.Parameters = params
+	config.Runtime = runtime
+	config.URL = url
+	config.Class = className
+	config.Method = methodName
+	config.Domain = appDomain
+	config.Bypass = bypass
 
 	var err error
 	if srcFile == "" {

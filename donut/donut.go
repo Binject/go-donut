@@ -141,34 +141,34 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 	if config.Type == DONUT_MODULE_NET_DLL ||
 		config.Type == DONUT_MODULE_NET_EXE {
 		if config.Domain == "" { // If no domain name specified, generate a random one
-			d := RandomString(DONUT_DOMAIN_LEN)
-			wstr := utf16.Encode([]rune(d))
+			config.Domain = RandomString(DONUT_DOMAIN_LEN)
+		}
+		wstr := utf16.Encode([]rune(config.Domain))
+		for i, r := range wstr {
+			mod.Domain[i] = r
+		}
+		if config.Type == DONUT_MODULE_NET_DLL {
+			log.Println("Class:", config.Class)
+			wstr = utf16.Encode([]rune(config.Class))
 			for i, r := range wstr {
-				mod.Domain[i] = r
+				mod.Cls[i] = r
 			}
-			if config.Type == DONUT_MODULE_NET_DLL {
-				log.Println("Class:", config.Class)
-				wstr = utf16.Encode([]rune(config.Class))
-				for i, r := range wstr {
-					mod.Cls[i] = r
-				}
-				log.Println("Method:", config.Method)
-				wstr = utf16.Encode([]rune(config.Method))
-				b := bytes.NewBuffer([]byte{})
-				for _, r := range wstr {
-					binary.Write(b, binary.LittleEndian, r)
-				}
-				copy(mod.Method[:], b.Bytes())
+			log.Println("Method:", config.Method)
+			wstr = utf16.Encode([]rune(config.Method))
+			b := bytes.NewBuffer([]byte{})
+			for _, r := range wstr {
+				binary.Write(b, binary.LittleEndian, r)
 			}
-			// If no runtime specified in configuration, use default
-			if config.Runtime == "" {
-				config.Runtime = "v2.0.50727"
-			}
-			log.Println("Runtime:", config.Runtime)
-			wstr = utf16.Encode([]rune(config.Runtime))
-			for i, r := range wstr {
-				mod.Runtime[i] = r
-			}
+			copy(mod.Method[:], b.Bytes())
+		}
+		// If no runtime specified in configuration, use default
+		if config.Runtime == "" {
+			config.Runtime = "v2.0.50727"
+		}
+		log.Println("Runtime:", config.Runtime)
+		wstr = utf16.Encode([]rune(config.Runtime))
+		for i, r := range wstr {
+			mod.Runtime[i] = r
 		}
 	} else if config.Type == DONUT_MODULE_DLL && config.Method == "" { // Unmanaged DLL? check for exported api
 		log.Println("DLL function:", config.Method)
@@ -377,7 +377,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		if config.NoCrypto {
 			return config.ModuleData, nil
 		}
-		config.ModuleData = Encrypt( //todo: make encrypt work on buffers?
+		config.ModuleData = Encrypt(
 			inst.ModKeyMk[:],
 			inst.ModKeyCtr[:],
 			config.ModuleData.Bytes(),

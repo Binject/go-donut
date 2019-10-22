@@ -82,6 +82,7 @@ type DonutConfig struct {
 	Class   string
 	Method  string // Used by Native DLL and .NET DLL
 	Runtime string
+	Bypass  int
 
 	Module     *DonutModule
 	ModuleName string
