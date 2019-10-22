@@ -92,14 +92,18 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 	}
 	w.WriteByte(0x59)
 
+	picLen := int(instanceLen) + 32
+
 	switch arch {
 	case X32:
 		w.WriteByte(0x5A) // preamble: pop edx, push ecx, push edx
 		w.WriteByte(0x51)
 		w.WriteByte(0x52)
 		w.Write(PayloadEXEx32)
+		picLen += len(PayloadEXEx32)
 	case X64:
 		w.Write(PayloadEXEx64)
+		picLen += len(PayloadEXEx64)
 	case X84:
 		w.WriteByte(0x31) // preamble: xor eax,eax
 		w.WriteByte(0xC0)
@@ -113,7 +117,16 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 			0x51,  // push ecx
 			0x52}) // push edx
 		w.Write(PayloadEXEx32)
+		picLen += len(PayloadEXEx32)
+		picLen += len(PayloadEXEx64)
 	}
+
+	// At the end, we pad with 0xCD "Clean Memory" bytes to mimic the behavior of the MSVC compiler used in donut.c
+	lb := w.Len()
+	for i := 0; i < picLen-lb; i++ {
+		w.WriteByte(0xCD)
+	}
+
 	return w, nil
 }
 
