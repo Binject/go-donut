@@ -13,12 +13,13 @@ import (
 func main() {
 
 	var srcFile, dstFile, url, archStr string
-	var noCrypto bool
+	var noCrypto, dotNet bool
 
 	flag.StringVar(&srcFile, "i", "", "Input file (source)")
 	flag.StringVar(&url, "u", "", "Input URL (source)") // ie. file:///C:/Windows//System32//calc.exe
 	flag.StringVar(&dstFile, "o", "payload.bin", "Output file (payload)")
 	flag.StringVar(&archStr, "a", "x84", "Architecture: x32, x64, or x84 (x32+x64)")
+	flag.BoolVar(&dotNet, "dotnet", false, ".NET Mode, set true for .NET exe and DLL files (autodetect not implemented)")
 	flag.BoolVar(&noCrypto, "nocrypto", false, "UNSAFE! Disables all crypto and randomness for testing only")
 	flag.Parse()
 
@@ -38,6 +39,7 @@ func main() {
 	config.Arch = donutArch
 	config.NoCrypto = noCrypto
 	config.InstType = donut.DONUT_INSTANCE_PIC //todo: add URL CLI options
+	config.DotNetMode = dotNet
 
 	var err error
 	if srcFile == "" {
@@ -59,7 +61,6 @@ func main() {
 			if _, err = payload.WriteTo(f); err != nil {
 				log.Fatal(err)
 			}
-			//err = ioutil.WriteFile(dstFile, payload.Bytes(), 0)
 		}
 	}
 	if err != nil {

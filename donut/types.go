@@ -3,7 +3,7 @@ package donut
 import (
 	"bytes"
 	"encoding/binary"
-	"log"
+	"io"
 
 	"github.com/google/uuid"
 )
@@ -75,7 +75,8 @@ type DonutConfig struct {
 	InstType   InstanceType
 	Parameters string // separated by , or ;
 
-	NoCrypto bool
+	NoCrypto   bool
+	DotNetMode bool
 
 	Domain  string // .NET stuff
 	Class   string
@@ -107,51 +108,29 @@ type DonutModule struct {
 }
 
 func WriteField(w *bytes.Buffer, name string, i interface{}) {
-	align := 8
-	pad := (w.Len() % align)
-	for p := 0; p < pad; p++ {
-		//		w.Write([]byte{0}) // pad with null out to byte alignment
-	}
-	vaddr := w.Len()
 	binary.Write(w, binary.LittleEndian, i)
-	pad2 := (w.Len() % align)
-	for p := 0; p < pad2; p++ {
-		//		w.Write([]byte{0}) // pad with null out to byte alignment
-	}
-	log.Printf("<field> %s\t %x:pad[%d/%d]\n", name, vaddr, pad, pad2)
 }
 
 func (mod *DonutModule) WriteTo(w *bytes.Buffer) {
-	log.Println("MODULE", w.Len())
-	baseLen := w.Len()
-	binary.Write(w, binary.LittleEndian, mod.ModType)
-	log.Println("ModType", w.Len(), w.Len()-baseLen)
-
+	WriteField(w, "ModType", mod.ModType)
 	binary.Write(w, binary.LittleEndian, mod.Runtime)
-	log.Println("Runtime", w.Len(), w.Len()-baseLen)
+	//log.Println("Runtime", w.Len(), w.Len()-baseLen)
 	binary.Write(w, binary.LittleEndian, mod.Domain)
-	log.Println("Domain", w.Len(), w.Len()-baseLen)
+	//log.Println("Domain", w.Len(), w.Len()-baseLen)
 	binary.Write(w, binary.LittleEndian, mod.Cls)
-	log.Println("CLS", w.Len(), w.Len()-baseLen)
+	//log.Println("CLS", w.Len(), w.Len()-baseLen)
 	w.Write(mod.Method[:len(mod.Method)])
-	//binary.Write(w, binary.LittleEndian, mod.Method)
-	log.Println("Method", w.Len(), w.Len()-baseLen)
+	//log.Println("Method", w.Len(), w.Len()-baseLen)
 
 	binary.Write(w, binary.LittleEndian, mod.ParamCount)
-	log.Println("ParamCount", w.Len(), w.Len()-baseLen)
+	//log.Println("ParamCount", w.Len(), w.Len()-baseLen)
 	binary.Write(w, binary.LittleEndian, mod.Param)
-	log.Println("Param", w.Len(), w.Len()-baseLen)
+	//log.Println("Param", w.Len(), w.Len()-baseLen)
 	w.Write(mod.Sig[:len(mod.Sig)])
-	//binary.Write(w, binary.LittleEndian, mod.Sig)
-	log.Println("Sig", w.Len(), w.Len()-baseLen)
+	//log.Println("Sig", w.Len(), w.Len()-baseLen)
 	binary.Write(w, binary.LittleEndian, mod.Mac)
-	log.Println("Mac", w.Len(), w.Len()-baseLen)
+	//log.Println("Mac", w.Len(), w.Len()-baseLen)
 	binary.Write(w, binary.LittleEndian, mod.Len)
-	log.Println("Len", w.Len(), w.Len()-baseLen)
-	//w.Write(mod.Data[:len(mod.Data)])
-	//log.Println("Data", w.Len(), w.Len()-baseLen)
-	//binary.Write(w, binary.LittleEndian, mod.Data)
-	log.Println("final len", w.Len(), w.Len()-baseLen)
 }
 
 type DonutInstance struct {
@@ -220,16 +199,12 @@ type DonutInstance struct {
 	ModKeyCtr [CipherBlockLen]byte // counter + nonce
 
 	Mod_len uint64 // total size of module
-
-	//Mod DonutModule
 }
 
 func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
-	start := w.Len()
-	log.Println("INSTANCE", start)
-
+	//start := w.Len()
 	WriteField(w, "Len", inst.Len)
-	for i := 0; i < 4; i++ { //todo: mystery padding
+	for i := 0; i < 4; i++ { // padding to 8-byte alignment after 4 byte field
 		w.WriteByte(0)
 	}
 	WriteField(w, "KeyMk", inst.KeyMk)
@@ -248,82 +223,42 @@ func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
 	WriteField(w, "WldpIsApproved", inst.WldpIsApproved)
 
 	binary.Write(w, binary.LittleEndian, inst.AmsiInit)
-	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.AmsiScanBuf)
-	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.AmsiScanStr)
-	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.Wscript)
-	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.Wscript_exe)
-	log.Println("len", w.Len())
 
 	binary.Write(w, binary.LittleEndian, inst.XIID_IUnknown)
-	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.XIID_IDispatch)
-	log.Println("len", w.Len())
 
-	binary.Write(w, binary.LittleEndian, inst.XCLSID_CLRMetaHost)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_ICLRMetaHost)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_ICLRRuntimeInfo)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XCLSID_CorRuntimeHost)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_ICorRuntimeHost)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_AppDomain)
-	log.Println("len", w.Len())
+	swapUUID(w, inst.XCLSID_CLRMetaHost)
+	swapUUID(w, inst.XIID_ICLRMetaHost)
+	swapUUID(w, inst.XIID_ICLRRuntimeInfo)
+	swapUUID(w, inst.XCLSID_CorRuntimeHost)
+	swapUUID(w, inst.XIID_ICorRuntimeHost)
+	swapUUID(w, inst.XIID_AppDomain)
 
-	binary.Write(w, binary.LittleEndian, inst.XCLSID_ScriptLanguage)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IHost)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScript)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptSite)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptSiteWindow)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptParse32)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IActiveScriptParse64)
-	log.Println("len", w.Len())
+	swapUUID(w, inst.XCLSID_ScriptLanguage)
+	swapUUID(w, inst.XIID_IHost)
+	swapUUID(w, inst.XIID_IActiveScript)
+	swapUUID(w, inst.XIID_IActiveScriptSite)
+	swapUUID(w, inst.XIID_IActiveScriptSiteWindow)
+	swapUUID(w, inst.XIID_IActiveScriptParse32)
+	swapUUID(w, inst.XIID_IActiveScriptParse64)
 
-	binary.Write(w, binary.LittleEndian, inst.XCLSID_DOMDocument30)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IXMLDOMDocument)
-	log.Println("len", w.Len())
-	binary.Write(w, binary.LittleEndian, inst.XIID_IXMLDOMNode)
-	log.Println("len", w.Len())
+	swapUUID(w, inst.XCLSID_DOMDocument30)
+	swapUUID(w, inst.XIID_IXMLDOMDocument)
+	swapUUID(w, inst.XIID_IXMLDOMNode)
 
 	binary.Write(w, binary.LittleEndian, inst.Type)
-	log.Println("len", w.Len())
-
 	binary.Write(w, binary.LittleEndian, inst.Url)
-	log.Println("len", w.Len())
 	binary.Write(w, binary.LittleEndian, inst.Req)
-	log.Println("len", w.Len())
-
 	binary.Write(w, binary.LittleEndian, inst.Sig)
-	log.Println("len", w.Len())
-
 	binary.Write(w, binary.LittleEndian, inst.Mac)
-	log.Println("len", w.Len())
-
 	binary.Write(w, binary.LittleEndian, inst.ModKeyMk)
-
 	binary.Write(w, binary.LittleEndian, inst.ModKeyCtr)
-	log.Println("len", w.Len())
-
-	//inst.Mod_len = 0xFFFFFFFFFFFFFFFF
 	binary.Write(w, binary.LittleEndian, inst.Mod_len)
-	log.Println("len", w.Len())
-
-	//inst.Mod.WriteTo(w)
-	log.Println("final len", w.Len())
 }
 
 type API_IMPORT struct {
@@ -373,7 +308,7 @@ var api_imports = []API_IMPORT{
 }
 
 // required to load .NET assemblies
-var ( //todo: the first 6 bytes of these were int32+int16, might need to be swapped
+var ( //the first 6 bytes of these were int32+int16, need to be swapped on write
 	xCLSID_CorRuntimeHost = uuid.UUID{
 		0xcb, 0x2f, 0x67, 0x23, 0xab, 0x3a, 0x11, 0xd2, 0x9c, 0x40, 0x00, 0xc0, 0x4f, 0xa3, 0x0a, 0x3e}
 
@@ -433,3 +368,17 @@ var ( //todo: the first 6 bytes of these were int32+int16, might need to be swap
 	xIID_IXMLDOMNode = uuid.UUID{
 		0x29, 0x33, 0xbf, 0x80, 0x7b, 0x36, 0x11, 0xd2, 0xb2, 0x0e, 0x00, 0xc0, 0x4f, 0x98, 0x3e, 0x60}
 )
+
+func swapUUID(w io.Writer, u uuid.UUID) {
+	bu := new(bytes.Buffer)
+	binary.Write(bu, binary.LittleEndian, u)
+	var a uint32
+	var b, c uint16
+	binary.Read(bu, binary.BigEndian, &a)
+	binary.Read(bu, binary.BigEndian, &b)
+	binary.Read(bu, binary.BigEndian, &c)
+	binary.Write(w, binary.LittleEndian, a)
+	binary.Write(w, binary.LittleEndian, b)
+	binary.Write(w, binary.LittleEndian, c)
+	bu.WriteTo(w)
+}

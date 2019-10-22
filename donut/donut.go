@@ -40,11 +40,17 @@ func ShellcodeFromFile(filename string, config *DonutConfig) (*bytes.Buffer, err
 	}
 	switch strings.ToLower(filepath.Ext(filename)) {
 	case ".exe":
-		config.Type = DONUT_MODULE_EXE
-		// todo: how to tell .NET or not?
+		if config.DotNetMode {
+			config.Type = DONUT_MODULE_NET_EXE
+		} else {
+			config.Type = DONUT_MODULE_EXE
+		}
 	case ".dll":
-		config.Type = DONUT_MODULE_DLL
-		// todo: how to tell .NET or not?
+		if config.DotNetMode {
+			config.Type = DONUT_MODULE_NET_DLL
+		} else {
+			config.Type = DONUT_MODULE_DLL
+		}
 	case ".xsl":
 		config.Type = DONUT_MODULE_XSL
 	case ".js":
@@ -65,10 +71,7 @@ func ShellcodeFromBytes(buf *bytes.Buffer, config *DonutConfig) (*bytes.Buffer, 
 	if err != nil {
 		return nil, err
 	}
-	// todo debug
-	ioutil.WriteFile("newinst.bin", instance.Bytes(), 0644)
-
-	// todo: all of this is a bit coupled
+	//ioutil.WriteFile("newinst.bin", instance.Bytes(), 0644)
 	return Sandwich(config.Arch, instance)
 }
 
@@ -157,10 +160,9 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 				}
 				copy(mod.Method[:], b.Bytes())
 			}
-			// If no runtime specified in configuration, use version from assembly (todo)
+			// If no runtime specified in configuration, use default
 			if config.Runtime == "" {
-				//strncpy(c.runtime, fi.ver, DONUT_MAX_NAME-1);
-				config.Runtime = "TODO"
+				config.Runtime = "v2.0.50727"
 			}
 			log.Println("Runtime:", config.Runtime)
 			wstr = utf16.Encode([]rune(config.Runtime))
@@ -293,7 +295,6 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	if config.Type == DONUT_MODULE_NET_DLL ||
 		config.Type == DONUT_MODULE_NET_EXE {
 		log.Println("Copying GUID structures and DLL strings for loading .NET assemblies")
-
 		copy(inst.XIID_AppDomain[:], xIID_AppDomain[:])
 		copy(inst.XIID_ICLRMetaHost[:], xIID_ICLRMetaHost[:])
 		copy(inst.XCLSID_CLRMetaHost[:], xCLSID_CLRMetaHost[:])
