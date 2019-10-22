@@ -106,7 +106,7 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 		w.WriteByte(0x48) // dec ecx
 		w.WriteByte(0x0F) // js dword x86_code (skips length of x64 code)
 		w.WriteByte(0x88)
-		///binary.Write(w, binary.LittleEndian, uint32(len(PayloadEXEx64)))
+		binary.Write(w, binary.LittleEndian, uint32(len(PayloadEXEx64)))
 		w.Write(PayloadEXEx64)
 
 		w.Write([]byte{0x5A, // in between 32/64 stubs: pop edx
