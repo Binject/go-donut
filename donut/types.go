@@ -110,28 +110,20 @@ type DonutModule struct {
 
 func WriteField(w *bytes.Buffer, name string, i interface{}) {
 	binary.Write(w, binary.LittleEndian, i)
+	// todo: logging here
 }
 
 func (mod *DonutModule) WriteTo(w *bytes.Buffer) {
 	WriteField(w, "ModType", mod.ModType)
-	binary.Write(w, binary.LittleEndian, mod.Runtime)
-	//log.Println("Runtime", w.Len(), w.Len()-baseLen)
-	binary.Write(w, binary.LittleEndian, mod.Domain)
-	//log.Println("Domain", w.Len(), w.Len()-baseLen)
-	binary.Write(w, binary.LittleEndian, mod.Cls)
-	//log.Println("CLS", w.Len(), w.Len()-baseLen)
-	w.Write(mod.Method[:len(mod.Method)])
-	//log.Println("Method", w.Len(), w.Len()-baseLen)
-
-	binary.Write(w, binary.LittleEndian, mod.ParamCount)
-	//log.Println("ParamCount", w.Len(), w.Len()-baseLen)
-	binary.Write(w, binary.LittleEndian, mod.Param)
-	//log.Println("Param", w.Len(), w.Len()-baseLen)
+	WriteField(w, "Runtime", mod.Runtime)
+	WriteField(w, "Domain", mod.Domain)
+	WriteField(w, "CLS", mod.Cls)
+	w.Write(mod.Method[:len(mod.Method)]) //todo
+	WriteField(w, "ParamCount", mod.ParamCount)
+	WriteField(w, "Param", mod.Param)
 	w.Write(mod.Sig[:len(mod.Sig)])
-	//log.Println("Sig", w.Len(), w.Len()-baseLen)
-	binary.Write(w, binary.LittleEndian, mod.Mac)
-	//log.Println("Mac", w.Len(), w.Len()-baseLen)
-	binary.Write(w, binary.LittleEndian, mod.Len)
+	WriteField(w, "Mac", mod.Mac)
+	WriteField(w, "Len", mod.Len)
 }
 
 type DonutInstance struct {
@@ -223,15 +215,15 @@ func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
 	WriteField(w, "WldpQuery", inst.WldpQuery)
 	WriteField(w, "WldpIsApproved", inst.WldpIsApproved)
 
-	binary.Write(w, binary.LittleEndian, inst.AmsiInit)
-	binary.Write(w, binary.LittleEndian, inst.AmsiScanBuf)
-	binary.Write(w, binary.LittleEndian, inst.AmsiScanStr)
+	WriteField(w, "AmsiInit", inst.AmsiInit)
+	WriteField(w, "AmsiScanBuf", inst.AmsiScanBuf)
+	WriteField(w, "AmsiScanStr", inst.AmsiScanStr)
 
-	binary.Write(w, binary.LittleEndian, inst.Wscript)
-	binary.Write(w, binary.LittleEndian, inst.Wscript_exe)
+	WriteField(w, "Wscript", inst.Wscript)
+	WriteField(w, "WscriptExe", inst.Wscript_exe)
 
-	binary.Write(w, binary.LittleEndian, inst.XIID_IUnknown)
-	binary.Write(w, binary.LittleEndian, inst.XIID_IDispatch)
+	swapUUID(w, inst.XIID_IUnknown)
+	swapUUID(w, inst.XIID_IDispatch)
 
 	swapUUID(w, inst.XCLSID_CLRMetaHost)
 	swapUUID(w, inst.XIID_ICLRMetaHost)
@@ -252,14 +244,14 @@ func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
 	swapUUID(w, inst.XIID_IXMLDOMDocument)
 	swapUUID(w, inst.XIID_IXMLDOMNode)
 
-	binary.Write(w, binary.LittleEndian, inst.Type)
-	binary.Write(w, binary.LittleEndian, inst.Url)
-	binary.Write(w, binary.LittleEndian, inst.Req)
-	binary.Write(w, binary.LittleEndian, inst.Sig)
-	binary.Write(w, binary.LittleEndian, inst.Mac)
-	binary.Write(w, binary.LittleEndian, inst.ModKeyMk)
-	binary.Write(w, binary.LittleEndian, inst.ModKeyCtr)
-	binary.Write(w, binary.LittleEndian, inst.Mod_len)
+	WriteField(w, "Type", inst.Type)
+	WriteField(w, "Url", inst.Url)
+	WriteField(w, "Req", inst.Req)
+	WriteField(w, "Sig", inst.Sig)
+	WriteField(w, "Mac", inst.Mac)
+	WriteField(w, "ModKeyMk", inst.ModKeyMk)
+	WriteField(w, "ModKeCtr", inst.ModKeyCtr)
+	WriteField(w, "Mod_len", inst.Mod_len)
 }
 
 type API_IMPORT struct {

