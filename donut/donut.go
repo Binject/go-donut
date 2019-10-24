@@ -110,26 +110,26 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 		w.WriteByte(0x5A) // preamble: pop edx, push ecx, push edx
 		w.WriteByte(0x51)
 		w.WriteByte(0x52)
-		w.Write(PAYLOAD_EXE_X86)
-		picLen += len(PAYLOAD_EXE_X86)
+		w.Write(LOADER_EXE_X86)
+		picLen += len(LOADER_EXE_X86)
 	case X64:
-		w.Write(PAYLOAD_EXE_X64)
-		picLen += len(PAYLOAD_EXE_X64)
+		w.Write(LOADER_EXE_X64)
+		picLen += len(LOADER_EXE_X64)
 	case X84:
 		w.WriteByte(0x31) // preamble: xor eax,eax
 		w.WriteByte(0xC0)
 		w.WriteByte(0x48) // dec ecx
 		w.WriteByte(0x0F) // js dword x86_code (skips length of x64 code)
 		w.WriteByte(0x88)
-		binary.Write(w, binary.LittleEndian, uint32(len(PAYLOAD_EXE_X64)))
-		w.Write(PAYLOAD_EXE_X64)
+		binary.Write(w, binary.LittleEndian, uint32(len(LOADER_EXE_X64)))
+		w.Write(LOADER_EXE_X64)
 
 		w.Write([]byte{0x5A, // in between 32/64 stubs: pop edx
 			0x51,  // push ecx
 			0x52}) // push edx
-		w.Write(PAYLOAD_EXE_X86)
-		picLen += len(PAYLOAD_EXE_X86)
-		picLen += len(PAYLOAD_EXE_X64)
+		w.Write(LOADER_EXE_X86)
+		picLen += len(LOADER_EXE_X86)
+		picLen += len(LOADER_EXE_X64)
 	}
 
 	// At the end, we pad with 0xCD "Clean Memory" bytes to mimic the behavior of the MSVC compiler used in donut.c
