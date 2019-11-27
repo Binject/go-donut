@@ -168,7 +168,7 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 		}
 		log.Println("Runtime:", config.Runtime)
 		copy(mod.Runtime[:], []byte(config.Runtime)[:])
-	} else if config.Type == DONUT_MODULE_DLL && config.Method == "" { // Unmanaged DLL? check for exported api
+	} else if config.Type == DONUT_MODULE_DLL && config.Method != "" { // Unmanaged DLL? check for exported api
 		log.Println("DLL function:", config.Method)
 		copy(mod.Method[:], []byte(config.Method))
 	}
@@ -176,6 +176,7 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 	mod.Len = uint32(inputFile.Len())
 
 	if config.Parameters != "" {
+		skip := false
 		// if type is unmanaged EXE
 		if config.Type == DONUT_MODULE_EXE {
 			// and entropy is enabled
@@ -185,9 +186,13 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 			} else {
 				// else set to "AAAA "
 				copy(mod.Param[:], []byte("AAAA ")[:])
+				copy(mod.Param[5:], []byte(config.Parameters)[:])
+				skip = true
 			}
 		}
-		copy(mod.Param[5:], []byte(config.Parameters)[:])
+		if !skip {
+			copy(mod.Param[:], []byte(config.Parameters)[:])
+		}
 	}
 
 	// read module into memory
