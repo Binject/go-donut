@@ -87,8 +87,8 @@ type DonutConfig struct {
 	// new in 0.9.3
 	Thread   uint32
 	Compress uint32
-	Ansi     uint32
-	Fork     uint32
+	Unicode  uint32
+	OEP      uint64
 	ExitOpt  uint32
 	Format   uint32
 
@@ -119,12 +119,12 @@ type DonutModule struct {
 	Method  [DONUT_MAX_NAME]byte // name of method to invoke for .NET DLL or api for unmanaged DLL
 	Param   [DONUT_MAX_NAME]byte // string parameters for DLL/EXE (donut max parm = 8)
 
-	Ansi uint32              // don't convert command line to unicode for unmanaged DLL function
-	Sig  [DONUT_SIG_LEN]byte // random string to verify decryption
-	Mac  uint64              // to verify decryption was ok
-	Zlen uint32              // compressed size of EXE/DLL/JS/VBS file
-	Len  uint32              // size of EXE/DLL/XSL/JS/VBS file
-	Data [4]byte             // data of EXE/DLL/XSL/JS/VBS file
+	Unicode uint32              // convert command line to unicode for unmanaged DLL function
+	Sig     [DONUT_SIG_LEN]byte // random string to verify decryption
+	Mac     uint64              // to verify decryption was ok
+	Zlen    uint32              // compressed size of EXE/DLL/JS/VBS file
+	Len     uint32              // size of EXE/DLL/XSL/JS/VBS file
+	Data    [4]byte             // data of EXE/DLL/XSL/JS/VBS file
 }
 
 func WriteField(w *bytes.Buffer, name string, i interface{}) {
@@ -143,7 +143,7 @@ func (mod *DonutModule) WriteTo(w *bytes.Buffer) {
 	WriteField(w, "Method", mod.Method)
 	WriteField(w, "Param", mod.Param)
 
-	WriteField(w, "Ansi", mod.Ansi)
+	WriteField(w, "Unicode", mod.Unicode)
 	w.Write(mod.Sig[:DONUT_SIG_LEN])
 	WriteField(w, "Mac", mod.Mac)
 	WriteField(w, "Zlen", mod.Zlen)
@@ -162,40 +162,22 @@ type DonutInstance struct {
 
 	ExitOpt uint32 // call RtlExitUserProcess to terminate the host process
 	Entropy uint32 // indicates entropt option
-	Fork    uint32 // create a local thread for the shellcode
+	OEP     uint64 // original entrypoint
 
 	// everything from here is encrypted
-	ApiCount uint32                  // the 64-bit hashes of API required for instance to work
-	DllCount uint32                  // the number of DLL to load before resolving API
-	DllName  [DONUT_MAX_DLL][32]byte // a list of DLL strings to load
+	ApiCount uint32               // the 64-bit hashes of API required for instance to work
+	DllNames [DONUT_MAX_NAME]byte // a list of DLL strings to load, separated by semi-colon
 
 	Dataname   [8]byte  // ".data"
 	Kernelbase [12]byte // "kernelbase"
+	Amsi       [8]byte  // "amsi"
+	Clr        [4]byte  // clr
+	Wldp       [8]byte  // wldp
 
-	Acmdln  [8]byte  // _acmdln
-	Pacmdln [12]byte // __p__acmdln
-	Argv    [8]byte  // __argv
-	Pargv   [16]byte // __p___argv
-
-	Wcmdln  [8]byte  // _wcmdln
-	Pwcmdln [12]byte // __p__wcmdln
-	Wargv   [8]byte  // __wargv
-	Pwargv  [16]byte // __p___wargv
-
-	Ntdll [8]byte // "ntdll"
-	Amsi  [8]byte // "amsi"
-
-	Exitproc1 [12]byte // kernelbase!ExitProcess or kernel32!ExitProcess
-	Exitproc2 [8]byte  // exit
-	Exitproc3 [8]byte  // _exit
-	Exitproc4 [8]byte  // _cexit
-	Exitproc5 [8]byte  // _c_exit
-	Exitproc6 [12]byte // quick_exit
-	Exitproc7 [8]byte  // _Exit
+	CmdSyms [DONUT_MAX_NAME]byte // symbols related to command line
+	ExitApi [DONUT_MAX_NAME]byte // exit-related API
 
 	Bypass         uint32   // indicates behaviour of byassing AMSI/WLDP
-	Clr            [4]byte  // clr
-	Wldp           [8]byte  // wldp.dll
 	WldpQuery      [32]byte // WldpQueryDynamicCodeTrust
 	WldpIsApproved [32]byte // WldpIsClassInApprovedList
 	AmsiInit       [16]byte // AmsiInitialize
@@ -251,39 +233,23 @@ func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
 	WriteField(w, "Hash", inst.Hash)
 	WriteField(w, "ExitOpt", inst.ExitOpt)
 	WriteField(w, "Entropy", inst.Entropy)
-	WriteField(w, "Fork", inst.Fork)
+	WriteField(w, "OEP", inst.OEP)
 
 	WriteField(w, "ApiCount", inst.ApiCount)
-	WriteField(w, "DllCount", inst.DllCount)
-	WriteField(w, "DllName", inst.DllName)
+	WriteField(w, "DllNames", inst.DllNames)
 
 	WriteField(w, "Dataname", inst.Dataname)
 	WriteField(w, "Kernelbase", inst.Kernelbase)
-	WriteField(w, "Acmdln", inst.Acmdln)
-	WriteField(w, "Pacmdln", inst.Pacmdln)
-	WriteField(w, "Argv", inst.Argv)
-	WriteField(w, "Pargv", inst.Pargv)
-	WriteField(w, "Wcmdln", inst.Wcmdln)
-	WriteField(w, "Pwcmdln", inst.Pwcmdln)
-	WriteField(w, "Wargv", inst.Wargv)
-	WriteField(w, "Pwargv", inst.Pwargv)
-
-	WriteField(w, "Ntdll", inst.Ntdll)
 	WriteField(w, "Amsi", inst.Amsi)
-	WriteField(w, "Exitproc1", inst.Exitproc1)
-	WriteField(w, "Exitproc2", inst.Exitproc2)
-	WriteField(w, "Exitproc3", inst.Exitproc3)
-	WriteField(w, "Exitproc4", inst.Exitproc4)
-	WriteField(w, "Exitproc5", inst.Exitproc5)
-	WriteField(w, "Exitproc6", inst.Exitproc6)
-	WriteField(w, "Exitproc7", inst.Exitproc7)
-
-	WriteField(w, "Bypass", inst.Bypass)
 	WriteField(w, "Clr", inst.Clr)
 	WriteField(w, "Wldp", inst.Wldp)
+
+	WriteField(w, "CmdSyms", inst.CmdSyms)
+	WriteField(w, "ExitApi", inst.ExitApi)
+
+	WriteField(w, "Bypass", inst.Bypass)
 	WriteField(w, "WldpQuery", inst.WldpQuery)
 	WriteField(w, "WldpIsApproved", inst.WldpIsApproved)
-
 	WriteField(w, "AmsiInit", inst.AmsiInit)
 	WriteField(w, "AmsiScanBuf", inst.AmsiScanBuf)
 	WriteField(w, "AmsiScanStr", inst.AmsiScanStr)
@@ -337,28 +303,30 @@ var api_imports = []API_IMPORT{
 	API_IMPORT{Module: KERNEL32_DLL, Name: "GetUserDefaultLCID"},
 	API_IMPORT{Module: KERNEL32_DLL, Name: "WaitForSingleObject"}, //10
 	API_IMPORT{Module: KERNEL32_DLL, Name: "CreateThread"},
+	API_IMPORT{Module: KERNEL32_DLL, Name: "GetThreadContext"},
+	API_IMPORT{Module: KERNEL32_DLL, Name: "GetCurrentThread"},
 
 	API_IMPORT{Module: SHELL32_DLL, Name: "CommandLineToArgvW"},
 
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreate"},
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreate"}, //15
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreateVector"},
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayPutElement"}, //15
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayPutElement"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayDestroy"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayGetLBound"},
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayGetUBound"},
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayGetUBound"}, //20
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SysAllocString"},
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "SysFreeString"}, //20
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "SysFreeString"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "LoadTypeLib"},
 
 	API_IMPORT{Module: WININET_DLL, Name: "InternetCrackUrlA"},
-	API_IMPORT{Module: WININET_DLL, Name: "InternetOpenA"},
+	API_IMPORT{Module: WININET_DLL, Name: "InternetOpenA"}, //25
 	API_IMPORT{Module: WININET_DLL, Name: "InternetConnectA"},
-	API_IMPORT{Module: WININET_DLL, Name: "InternetSetOptionA"}, // 25
+	API_IMPORT{Module: WININET_DLL, Name: "InternetSetOptionA"},
 	API_IMPORT{Module: WININET_DLL, Name: "InternetReadFile"},
 	API_IMPORT{Module: WININET_DLL, Name: "InternetCloseHandle"},
-	API_IMPORT{Module: WININET_DLL, Name: "HttpOpenRequestA"},
+	API_IMPORT{Module: WININET_DLL, Name: "HttpOpenRequestA"}, //30
 	API_IMPORT{Module: WININET_DLL, Name: "HttpSendRequestA"},
-	API_IMPORT{Module: WININET_DLL, Name: "HttpQueryInfoA"}, // 30
+	API_IMPORT{Module: WININET_DLL, Name: "HttpQueryInfoA"},
 
 	API_IMPORT{Module: MSCOREE_DLL, Name: "CorBindToRuntime"},
 	API_IMPORT{Module: MSCOREE_DLL, Name: "CLRCreateInstance"},
@@ -376,6 +344,7 @@ var api_imports = []API_IMPORT{
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlCreateUnicodeString"},
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlGetCompressionWorkSpaceSize"},
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlDecompressBufferEx"},
+	API_IMPORT{Module: NTDLL_DLL, Name: "NtContinue"},
 }
 
 // required to load .NET assemblies

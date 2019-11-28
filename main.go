@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Binject/go-donut/donut"
@@ -32,8 +33,8 @@ func main() {
 		Default: "loader.bin", Help: "Output file."})
 	format := parser.Int("f", "format", &argparse.Options{Required: false,
 		Default: 1, Help: "Output format. 1=raw, 2=base64, 3=c, 4=ruby, 5=python, 6=powershell, 7=C#, 8=hex"})
-	yFlag := parser.Flag("y", "fork", &argparse.Options{Required: false,
-		Help: "Create new thread for entrypoint and return handle to caller. Default uses existing thread."})
+	oepString := parser.String("y", "oep", &argparse.Options{Required: false,
+		Help: "Create a new thread for loader. Optionally execute original entrypoint of host process."})
 	action := parser.Int("x", "exit", &argparse.Options{Required: false,
 		Default: 1, Help: "Exiting. 1=exit thread, 2=exit process"})
 
@@ -46,8 +47,8 @@ func main() {
 		Help: "Optional method or API name for DLL. (a method is required for .NET DLL)"})
 	params := parser.String("p", "params", &argparse.Options{Required: false,
 		Help: "Optional parameters/command line inside quotations for DLL method/function or EXE."})
-	wFlag := parser.Flag("w", "ansi", &argparse.Options{Required: false,
-		Help: "Command line is passed to unmanaged DLL function as ANSI. (default is UNICODE)"})
+	wFlag := parser.Flag("w", "unicode", &argparse.Options{Required: false,
+		Help: "Command line is passed to unmanaged DLL function in UNICODE format. (default is ANSI)"})
 	runtime := parser.String("r", "runtime", &argparse.Options{Required: false,
 		Help: "CLR runtime version."})
 	tFlag := parser.Flag("t", "thread", &argparse.Options{Required: false,
@@ -66,6 +67,16 @@ func main() {
 		return
 	}
 
+	var err error
+	oep := uint64(0)
+	if *oepString != "" {
+		oep, err = strconv.ParseUint(*oepString, 16, 64)
+		if err != nil {
+			log.Println("Invalid OEP: " + err.Error())
+			return
+		}
+	}
+
 	var donutArch donut.DonutArch
 	switch strings.ToLower(*archStr) {
 	case "x32":
@@ -81,6 +92,7 @@ func main() {
 	config := new(donut.DonutConfig)
 	config.Arch = donutArch
 	config.Entropy = uint32(*entropy)
+	config.OEP = oep
 
 	if *url == "" {
 		config.InstType = donut.DONUT_INSTANCE_PIC
@@ -103,15 +115,11 @@ func main() {
 	if *tFlag {
 		config.Thread = 1
 	}
-	if *yFlag {
-		config.Fork = 1
-	}
-	if *wFlag { // don't convert command line to unicode? only applies to unmanaged DLL function
-		config.Ansi = 1
+	if *wFlag { // convert command line to unicode? only applies to unmanaged DLL function
+		config.Unicode = 1
 	}
 	config.ExitOpt = uint32(*action)
 
-	var err error
 	if *srcFile == "" {
 		if *url == "" {
 			log.Fatal("No source URL or file provided")

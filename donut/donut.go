@@ -144,7 +144,7 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 	mod := new(DonutModule)
 	mod.ModType = uint32(config.Type)
 	mod.Thread = uint32(config.Thread)
-	mod.Ansi = uint32(config.Ansi)
+	mod.Unicode = uint32(config.Unicode)
 	mod.Compress = uint32(config.Compress)
 
 	if config.Type == DONUT_MODULE_NET_DLL ||
@@ -211,7 +211,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 	inst := new(DonutInstance)
 	modLen := uint32(config.ModuleData.Len()) // ModuleData is mod struct + input file
-	instLen := uint32(3312 + 8)               //todo: that's how big it is in the C version...
+	instLen := uint32(3312 + 352 + 8)         //todo: that's how big it is in the C version...
 	inst.Bypass = uint32(config.Bypass)
 
 	// if this is a PIC instance, add the size of module
@@ -271,17 +271,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	}
 	// save how many API to resolve
 	inst.ApiCount = uint32(len(api_imports))
-	inst.DllCount = 0
-	copy(inst.DllName[inst.DllCount][:], "ole32.dll")
-	inst.DllCount++
-	copy(inst.DllName[inst.DllCount][:], "oleaut32.dll")
-	inst.DllCount++
-	copy(inst.DllName[inst.DllCount][:], "wininet.dll")
-	inst.DllCount++
-	copy(inst.DllName[inst.DllCount][:], "mscoree.dll")
-	inst.DllCount++
-	copy(inst.DllName[inst.DllCount][:], "shell32.dll")
-	inst.DllCount++
+	copy(inst.DllNames[:], "ole32;oleaut32;wininet;mscoree;shell32;dnsapi")
 
 	// if module is .NET assembly
 	if config.Type == DONUT_MODULE_NET_DLL ||
@@ -327,25 +317,10 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	copy(inst.Dataname[:], ".data")
 	copy(inst.Kernelbase[:], "kernelbase")
 
-	// ansi symbols
-	copy(inst.Acmdln[:], "_acmdln")
-	copy(inst.Pacmdln[:], "__p__acmdln")
-	copy(inst.Argv[:], "__argv")
-	copy(inst.Pargv[:], "__p___argv")
+	copy(inst.CmdSyms[:],
+		"_acmdln;__argv;__p__acmdln;__p___argv;_wcmdln;__wargv;__p__wcmdln;__p___wargv")
 
-	// unicode symbols
-	copy(inst.Wcmdln[:], "_wcmdln")
-	copy(inst.Pwcmdln[:], "__p__wcmdln")
-	copy(inst.Wargv[:], "__wargv")
-	copy(inst.Pwargv[:], "__p___wargv")
-
-	copy(inst.Exitproc1[:], "ExitProcess")
-	copy(inst.Exitproc2[:], "exit")
-	copy(inst.Exitproc3[:], "_exit")
-	copy(inst.Exitproc4[:], "_cexit")
-	copy(inst.Exitproc5[:], "_c_exit")
-	copy(inst.Exitproc6[:], "quick_exit")
-	copy(inst.Exitproc7[:], "_Exit")
+	copy(inst.ExitApi[:], "ExitProcess;exit;_exit;_cexit;_c_exit;quick_exit;_Exit")
 
 	// required to disable WLDP
 	copy(inst.Wldp[:], "wldp")
@@ -358,7 +333,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	// indicate if we should call RtlExitUserProcess to terminate host process
 	inst.ExitOpt = config.ExitOpt
 	// set the fork option
-	inst.Fork = config.Fork
+	inst.OEP = config.OEP
 	// set the entropy level
 	inst.Entropy = config.Entropy
 
