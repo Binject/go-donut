@@ -1,0 +1,167 @@
+//------------------------------------------------
+//--- 010 Editor v9.0.2 Binary Template
+//
+//      File: donut-payload.bt
+//   Authors: awgh <awgh@awgh.org>
+//   Version: 0.2
+//   Purpose: Donut Payload 
+//  Category: Progamming
+// File Mask: *.bin
+//  ID Bytes: 
+//   History: 
+//   0.2 2019-11-23  awgh:  Donut version 0.9.3 
+//   0.1 2019-10-20  awgh:  Initial Revision
+//------------------------------------------------
+
+DisplayFormatHex();
+LittleEndian();
+
+typedef struct {
+    uint32   type;               // EXE, DLL, JS, VBS, XSL
+    uint32   thread;   // run entrypoint of unmanaged EXE as a thread
+    uint32   compress; // indicates engine used for compression
+    char     runtime[256];       // runtime version for .NET EXE/DLL
+    char     domain[256];        // domain name to use for .NET EXE/DLL
+    char     cls[256];           // name of class and optional namespace for .NET EXE/DLL
+    char     method[256];        // name of method to invoke for .NET DLL or api for unmanaged DLL
+    char     param[256]; // string parameters for DLL/EXE
+    uint32   unicode;  // convert command line to unicode for unmanaged DLL function        
+    char     sig[8];           // random string to verify decryption
+    uint64   mac;                // to verify decryption was ok
+    uint32   zlen;               // compressed size of EXE/DLL/JS/VBS file
+    uint32   len;                // size of EXE/DLL/XSL/JS/VBS file
+    char     data[4];            // data of EXE/DLL/XSL/JS/VBS file
+} DONUT_MODULE;
+
+typedef struct {
+    int    len;                          // total size of instance
+    char key_mk[16];                          // decrypts instance
+    char key_ctr[16];
+    uint64    iv;                           // the 64-bit initial value for maru hash
+
+    int pad;
+
+    union {
+      uint64  hash[64];                     // holds up to 64 api hashes
+      uint64     addr[64];                     // holds up to 64 api addresses
+/*
+      // include prototypes only if header included from payload.h
+      struct {
+        // imports from kernel32.dll or kernelbase.dll
+        LoadLibraryA_t             LoadLibraryA;
+        GetProcAddress_t           GetProcAddress;        
+        GetModuleHandleA_t         GetModuleHandleA;  
+        VirtualAlloc_t             VirtualAlloc;        // required to allocate RW memory for instance        
+        VirtualFree_t              VirtualFree;  
+        VirtualQuery_t             VirtualQuery;
+        VirtualProtect_t           VirtualProtect;
+        Sleep_t                    Sleep;
+        MultiByteToWideChar_t      MultiByteToWideChar;
+        GetUserDefaultLCID_t       GetUserDefaultLCID;
+        
+        // imports from oleaut32.dll
+        SafeArrayCreate_t          SafeArrayCreate;          
+        SafeArrayCreateVector_t    SafeArrayCreateVector;    
+        SafeArrayPutElement_t      SafeArrayPutElement;      
+        SafeArrayDestroy_t         SafeArrayDestroy;
+        SafeArrayGetLBound_t       SafeArrayGetLBound;        
+        SafeArrayGetUBound_t       SafeArrayGetUBound;        
+        SysAllocString_t           SysAllocString;           
+        SysFreeString_t            SysFreeString;
+        LoadTypeLib_t              LoadTypeLib;
+        
+        // imports from wininet.dll
+        InternetCrackUrl_t         InternetCrackUrl;         
+        InternetOpen_t             InternetOpen;             
+        InternetConnect_t          InternetConnect;          
+        InternetSetOption_t        InternetSetOption;        
+        InternetReadFile_t         InternetReadFile;         
+        InternetCloseHandle_t      InternetCloseHandle;      
+        HttpOpenRequest_t          HttpOpenRequest;          
+        HttpSendRequest_t          HttpSendRequest;          
+        HttpQueryInfo_t            HttpQueryInfo;
+        
+        // imports from mscoree.dll
+        CorBindToRuntime_t         CorBindToRuntime;
+        CLRCreateInstance_t        CLRCreateInstance;
+        
+        // imports from ole32.dll
+        CoInitializeEx_t           CoInitializeEx;
+        CoCreateInstance_t         CoCreateInstance;
+        CoUninitialize_t           CoUninitialize;
+      };
+*/
+    } api;
+    
+    int      exit_opt;       // call RtlExitUserProcess to terminate the host process
+    int      entropy;        // indicates entropt option
+    uint64      oep;           // original entrypoint
+    
+    // everything from here is encrypted
+    int         api_cnt;                      // the 64-bit hashes of API required for instance to work
+    char        dll_names[256];  // a list of DLL strings to load, semi-colon separated
+      
+    char     dataname[8];                  // ".data"
+    char     kernelbase[12];               // "kernelbase"
+    char     amsi[8];                      // "amsi"
+    char        clr[4];                       // clr
+    char        wldp[8];                     // wldp
+
+    char        cmd_syms[256];     // symbols related to command line
+    char        exit_api[256];     // exit-related API
+
+    int         bypass;                       // indicates behaviour of byassing AMSI/WLDP 
+    char        wldpQuery[32];                // WldpQueryDynamicCodeTrust
+    char        wldpIsApproved[32];           // WldpIsClassInApprovedList
+    char        amsiInit[16];                 // AmsiInitialize
+    char        amsiScanBuf[16];              // AmsiScanBuffer
+    char        amsiScanStr[16];              // AmsiScanString
+    
+    char    wscript[8];                   // WScript
+    char    wscript_exe[12];              // wscript.exe
+
+    char     xIID_IUnknown[16];
+    char     xIID_IDispatch[16];
+    
+    // GUID required to load .NET assemblies
+    char     xCLSID_CLRMetaHost[16];
+    char     xIID_ICLRMetaHost[16];  
+    char     xIID_ICLRRuntimeInfo[16];
+    char     xCLSID_CorRuntimeHost[16];
+    char     xIID_ICorRuntimeHost[16];
+    char     xIID_AppDomain[16];
+    
+    // GUID required to run VBS and JS files
+    char     xCLSID_ScriptLanguage[16];          // vbs or js
+    char     xIID_IHost[16];                     // wscript object
+    char     xIID_IActiveScript[16];             // engine
+    char     xIID_IActiveScriptSite[16];         // implementation
+    char     xIID_IActiveScriptSiteWindow[16];   // basic GUI stuff
+    char     xIID_IActiveScriptParse32[16];      // parser
+    char     xIID_IActiveScriptParse64[16];
+        
+    int      type;  // DONUT_INSTANCE_PIC or DONUT_INSTANCE_URL 
+    
+    struct {
+      char url[256]; // staging server hosting donut module
+      char req[8];             // just a buffer for "GET"
+    } http;
+
+    char     sig[256];          // string to hash
+    uint64    mac;                          // to verify decryption ok
+    
+    char mod_key_mk[16];       // used to decrypt module
+    char mod_key_ctr[16];
+
+    uint64   mod_len;       // total size of module
+    
+    DONUT_MODULE  module;         // for PIC
+   
+} DONUT_INSTANCE;
+
+
+
+SetBackColor(0xc0ffff);
+char e8;
+int instanceLength;
+DONUT_INSTANCE instance;
