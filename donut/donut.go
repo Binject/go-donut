@@ -228,41 +228,48 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 			return nil, err
 		}
 		copy(inst.KeyMk[:], tk)
+
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
 		}
 		copy(inst.KeyCtr[:], tk)
+
 		log.Println("Generating random key for module")
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
 		}
 		copy(inst.ModKeyMk[:], tk)
+
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
 		}
 		copy(inst.ModKeyCtr[:], tk)
+
 		log.Println("Generating random string to verify decryption")
 		sbsig := RandomString(DONUT_SIG_LEN)
 		copy(inst.Sig[:], []byte(sbsig))
+
 		log.Println("Generating random IV for Maru hash")
 		iv, err := GenerateRandomBytes(MARU_IV_LEN)
 		if err != nil {
 			return nil, err
 		}
-		copy(inst.Iv[:], []byte(iv))
+		inst.Iv = binary.LittleEndian.Uint64(iv)
+
+		inst.Mac = Maru(inst.Sig[:], inst.Iv)
 	}
 	log.Println("Generating hashes for API using IV:", inst.Iv)
 
 	for cnt, c := range api_imports {
 		// calculate hash for DLL string
-		dllHash := Maru([]byte(c.Module), inst.Iv[:])
+		dllHash := Maru([]byte(c.Module), inst.Iv)
 
 		// calculate hash for API string.
 		// xor with DLL hash and store in instance
-		inst.Hash[cnt] = Maru([]byte(c.Name), inst.Iv[:]) ^ dllHash
+		inst.Hash[cnt] = Maru([]byte(c.Name), inst.Iv) ^ dllHash
 
 		log.Printf("Hash for %s : %s = %x\n",
 			c.Module,
@@ -365,12 +372,11 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 	if config.InstType == DONUT_INSTANCE_URL && config.Entropy == DONUT_ENTROPY_DEFAULT {
 		log.Println("encrypting module for download")
-		config.ModuleMac = Maru(inst.Sig[:], inst.Iv[:])
-		config.ModuleData = Encrypt(
+		config.ModuleMac = Maru(inst.Sig[:], inst.Iv)
+		config.ModuleData = bytes.NewBuffer(Encrypt(
 			inst.ModKeyMk[:],
 			inst.ModKeyCtr[:],
-			config.ModuleData.Bytes(),
-			uint32(config.ModuleData.Len()))
+			config.ModuleData.Bytes()))
 		b := new(bytes.Buffer)
 		inst.Len = instLen - 8 /* magic padding */
 		inst.WriteTo(b)
@@ -391,22 +397,25 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	if config.Entropy != DONUT_ENTROPY_DEFAULT {
 		return b, nil
 	}
-	inst.Mac = Maru(inst.Sig[:], inst.Iv[:])
 	log.Println("encrypting instance")
 	instData := b.Bytes()
 	offset := 4 + // Len uint32
 		CipherKeyLen + CipherBlockLen + // Instance Crypt
+		4 + // pad
 		8 + // IV
-		64 // Hash
+		(64 * 8) + // Hashes (64 uuids of len 64bit)
+		4 + // exit_opt
+		4 + // entropy
+		8 // OEP
 
 	encInstData := Encrypt(
 		inst.KeyMk[:],
 		inst.KeyCtr[:],
-		instData[offset:],
-		uint32(len(instData))-offset)
+		instData[offset:])
+
 	bc := new(bytes.Buffer)
-	binary.Write(bc, binary.LittleEndian, instData[:offset])
-	if _, err := encInstData.WriteTo(bc); err != nil {
+	binary.Write(bc, binary.LittleEndian, instData[:offset]) // unencrypted header
+	if _, err := bc.Write(encInstData); err != nil {         // encrypted body
 		log.Fatal(err)
 	}
 	log.Println("Leaving.")

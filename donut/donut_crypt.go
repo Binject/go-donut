@@ -70,17 +70,15 @@ func BytesToUint32s(inbytes []byte) []uint32 {
 }
 
 // Encrypt - encrypt/decrypt data in counter mode
-func Encrypt(mk []byte, ctr []byte, data []byte, length uint32) *bytes.Buffer {
-	x := make([]byte, CipherBlockLen) //todo: verify this is always CipherBlockLen
-	p := uint32(0)                    // data index
-	c := uint32(0)                    // ctr index
-	retval := new(bytes.Buffer)
-
+func Encrypt(mk []byte, ctr []byte, data []byte) []byte {
+	length := uint32(len(data))
+	x := make([]byte, CipherBlockLen)
+	p := uint32(0) // data blocks counter
+	retval := make([]byte, length)
 	for length > 0 {
 		// copy counter+nonce to local buffer
-		for i := uint32(0); i < CipherBlockLen; i++ {
-			x[i] = ctr[i+c]
-		}
+		copy(x[:CipherBlockLen], ctr[:CipherBlockLen])
+
 		// donut_encrypt x
 		x = Chaskey(mk, x)
 
@@ -92,20 +90,19 @@ func Encrypt(mk []byte, ctr []byte, data []byte, length uint32) *bytes.Buffer {
 			r = length
 		}
 		for i := uint32(0); i < r; i++ {
-			data[i+p] ^= x[i]
+			retval[i+p] = data[i+p] ^ x[i]
 		}
 		// update length + position
 		length -= r
 		p += r
 
 		// update counter
-		for i := CipherBlockLen; i > 0; i-- {
-			ctr[i-1]++
-			if ctr[i-1] != 0 {
+		for i := CipherBlockLen - 1; i >= 0; i-- {
+			ctr[i]++
+			if ctr[i] != 0 {
 				break
 			}
 		}
-		binary.Write(retval, binary.LittleEndian, x)
 	}
 	return retval
 }
@@ -146,10 +143,11 @@ func Speck(mk []byte, p uint64) uint64 {
 }
 
 // Maru hash
-func Maru(input []byte, iv []byte) uint64 { // todo: iv and return must be 8 bytes
+func Maru(input []byte, iv uint64) uint64 { // todo: iv and return must be 8 bytes
 
 	// set H to initial value
-	h := binary.LittleEndian.Uint64(iv)
+	//h := binary.LittleEndian.Uint64(iv)
+	h := iv
 	b := make([]byte, MARU_BLK_LEN)
 
 	idx, length, end := 0, 0, 0

@@ -157,7 +157,7 @@ type DonutInstance struct {
 	KeyMk  [CipherKeyLen]byte   // master key
 	KeyCtr [CipherBlockLen]byte // counter + nonce
 
-	Iv   [8]byte    // the 64-bit initial value for maru hash
+	Iv   uint64     // the 64-bit initial value for maru hash
 	Hash [64]uint64 // holds up to 64 api hashes/addrs {api}
 
 	ExitOpt uint32 // call RtlExitUserProcess to terminate the host process
@@ -224,11 +224,11 @@ type DonutInstance struct {
 func (inst *DonutInstance) WriteTo(w *bytes.Buffer) {
 	//start := w.Len()
 	WriteField(w, "Len", inst.Len)
+	WriteField(w, "KeyMk", inst.KeyMk)
+	WriteField(w, "KeyCtr", inst.KeyCtr)
 	for i := 0; i < 4; i++ { // padding to 8-byte alignment after 4 byte field
 		w.WriteByte(0)
 	}
-	WriteField(w, "KeyMk", inst.KeyMk)
-	WriteField(w, "KeyCtr", inst.KeyCtr)
 	WriteField(w, "Iv", inst.Iv)
 	WriteField(w, "Hash", inst.Hash)
 	WriteField(w, "ExitOpt", inst.ExitOpt)

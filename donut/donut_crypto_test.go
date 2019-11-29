@@ -2,6 +2,7 @@ package donut
 
 import (
 	"bytes"
+	"encoding/binary"
 	"log"
 	"testing"
 )
@@ -31,12 +32,28 @@ func Test_Chaskey_1(t *testing.T) {
 }
 
 func Test_Maru_1(t *testing.T) {
-
-	dllHash := Maru([]byte("oleaut32.dll"), []byte{0, 0, 0, 0, 0, 0, 0, 0})
-	hash := Maru([]byte("SafeArrayCreateVector"), []byte{0, 0, 0, 0, 0, 0, 0, 0}) ^ dllHash
+	iv := binary.LittleEndian.Uint64([]byte{0, 0, 0, 0, 0, 0, 0, 0})
+	dllHash := Maru([]byte("oleaut32.dll"), iv)
+	hash := Maru([]byte("SafeArrayCreateVector"), iv) ^ dllHash
 	log.Printf("Hash: %x (dllHash was %x)\n", hash, dllHash)
 
 	if 0xbd77af2569689c8a == hash {
+		t.Log("Maru Test Passed")
+	} else {
+		t.Log("Maru Test Failed\n")
+		t.Fail()
+	}
+}
+
+func Test_Maru_2(t *testing.T) {
+
+	iv := binary.LittleEndian.Uint64([]byte{0xEB, 0xA7, 0xF4, 0xDE, 0x07, 0x5B, 0xF8, 0x88})
+	dllHash := Maru([]byte("kernel32.dll"), iv)
+	hash := Maru([]byte("Sleep"), iv) ^ dllHash
+	log.Printf("Hash: %x (dllHash was %x)\n", hash, dllHash)
+
+	//0x17, 0xFC, 0xA0, 0x40, 0xD2, 0xBA, 0x66, 0xC7
+	if 0xc766bad240a0fc17 == hash {
 		t.Log("Maru Test Passed")
 	} else {
 		t.Log("Maru Test Failed\n")
