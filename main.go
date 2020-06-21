@@ -79,9 +79,9 @@ func main() {
 
 	var donutArch donut.DonutArch
 	switch strings.ToLower(*archStr) {
-	case "x32":
+	case "x32", "386":
 		donutArch = donut.X32
-	case "x64":
+	case "x64", "amd64":
 		donutArch = donut.X64
 	case "x84":
 		donutArch = donut.X84
