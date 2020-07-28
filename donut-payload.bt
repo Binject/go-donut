@@ -3,13 +3,14 @@
 //
 //      File: donut-payload.bt
 //   Authors: awgh <awgh@awgh.org>
-//   Version: 0.2
+//   Version: 0.3
 //   Purpose: Donut Payload 
 //  Category: Progamming
 // File Mask: *.bin
 //  ID Bytes: 
 //   History: 
-//   0.2 2019-11-23  awgh:  Donut version 0.9.3 
+//   0.3 2020-07-27  awgh:  Donut version 0.9.3
+//   0.2 2019-11-23  awgh:  Donut version 0.9.3-rc1 
 //   0.1 2019-10-20  awgh:  Initial Revision
 //------------------------------------------------
 
@@ -58,7 +59,16 @@ typedef struct {
         Sleep_t                    Sleep;
         MultiByteToWideChar_t      MultiByteToWideChar;
         GetUserDefaultLCID_t       GetUserDefaultLCID;
+        WaitForSingleObject_t            WaitForSingleObject;
+        CreateThread_t                   CreateThread;
+        GetThreadContext_t               GetThreadContext;
+        GetCurrentThread_t               GetCurrentThread;
+        GetCommandLineA_t                GetCommandLineA;
+        GetCommandLineW_t                GetCommandLineW;
         
+        // imports from shell32.dll
+        CommandLineToArgvW_t             CommandLineToArgvW;
+
         // imports from oleaut32.dll
         SafeArrayCreate_t          SafeArrayCreate;          
         SafeArrayCreateVector_t    SafeArrayCreateVector;    
@@ -89,6 +99,22 @@ typedef struct {
         CoInitializeEx_t           CoInitializeEx;
         CoCreateInstance_t         CoCreateInstance;
         CoUninitialize_t           CoUninitialize;
+
+        // imports from ntdll.dll
+        RtlEqualUnicodeString_t          RtlEqualUnicodeString;
+        RtlEqualString_t                 RtlEqualString;
+        RtlUnicodeStringToAnsiString_t   RtlUnicodeStringToAnsiString;
+        RtlInitUnicodeString_t           RtlInitUnicodeString;
+        RtlExitUserThread_t              RtlExitUserThread;
+        RtlExitUserProcess_t             RtlExitUserProcess;
+        RtlCreateUnicodeString_t         RtlCreateUnicodeString;
+        RtlGetCompressionWorkSpaceSize_t RtlGetCompressionWorkSpaceSize;
+        RtlDecompressBuffer_t            RtlDecompressBuffer;
+        NtContinue_t                     NtContinue;
+        AddVectoredExceptionHandler_t    AddVectoredExceptionHandler;
+        RemoveVectoredExceptionHandler_t RemoveVectoredExceptionHandler;
+       // RtlFreeUnicodeString_t         RtlFreeUnicodeString;
+       // RtlFreeString_t                RtlFreeString;
       };
 */
     } api;

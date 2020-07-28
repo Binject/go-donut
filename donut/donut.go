@@ -181,12 +181,12 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 		if config.Type == DONUT_MODULE_EXE {
 			// and entropy is enabled
 			if config.Entropy != DONUT_ENTROPY_NONE {
-				// generate 4-byte random name
-				copy(mod.Param[:], []byte(RandomString(4) + " ")[:])
+				// generate random name
+				copy(mod.Param[:], []byte(RandomString(DONUT_DOMAIN_LEN) + " ")[:])
 			} else {
 				// else set to "AAAA "
-				copy(mod.Param[:], []byte("AAAA ")[:])
-				copy(mod.Param[5:], []byte(config.Parameters)[:])
+				copy(mod.Param[:], []byte("AAAAAAAA ")[:])
+				copy(mod.Param[9:], []byte(config.Parameters)[:])
 				skip = true
 			}
 		}
@@ -278,7 +278,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	}
 	// save how many API to resolve
 	inst.ApiCount = uint32(len(api_imports))
-	copy(inst.DllNames[:], "ole32;oleaut32;wininet;mscoree;shell32;dnsapi")
+	copy(inst.DllNames[:], "ole32;oleaut32;wininet;mscoree;shell32")
 
 	// if module is .NET assembly
 	if config.Type == DONUT_MODULE_NET_DLL ||
@@ -321,14 +321,16 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	copy(inst.AmsiScanStr[:], "AmsiScanString")
 
 	// stuff for PE loader
-	copy(inst.Dataname[:], ".data")
-	copy(inst.Kernelbase[:], "kernelbase")
+	if len(config.Parameters) > 0 {
+		copy(inst.Dataname[:], ".data")
+		copy(inst.Kernelbase[:], "kernelbase")
 
-	copy(inst.CmdSyms[:],
-		"_acmdln;__argv;__p__acmdln;__p___argv;_wcmdln;__wargv;__p__wcmdln;__p___wargv")
-
-	copy(inst.ExitApi[:], "ExitProcess;exit;_exit;_cexit;_c_exit;quick_exit;_Exit")
-
+		copy(inst.CmdSyms[:],
+			"_acmdln;__argv;__p__acmdln;__p___argv;_wcmdln;__wargv;__p__wcmdln;__p___wargv")
+	}
+	if config.Thread != 0 {
+		copy(inst.ExitApi[:], "ExitProcess;exit;_exit;_cexit;_c_exit;quick_exit;_Exit")
+	}
 	// required to disable WLDP
 	copy(inst.Wldp[:], "wldp")
 	copy(inst.WldpQuery[:], "WldpQueryDynamicCodeTrust")

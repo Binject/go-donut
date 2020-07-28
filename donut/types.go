@@ -305,46 +305,51 @@ var api_imports = []API_IMPORT{
 	API_IMPORT{Module: KERNEL32_DLL, Name: "CreateThread"},
 	API_IMPORT{Module: KERNEL32_DLL, Name: "GetThreadContext"},
 	API_IMPORT{Module: KERNEL32_DLL, Name: "GetCurrentThread"},
+	API_IMPORT{Module: KERNEL32_DLL, Name: "GetCommandLineA"},
+	API_IMPORT{Module: KERNEL32_DLL, Name: "GetCommandLineW"}, // 15
 
 	API_IMPORT{Module: SHELL32_DLL, Name: "CommandLineToArgvW"},
 
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreate"}, //15
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreate"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayCreateVector"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayPutElement"},
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayDestroy"},
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayDestroy"}, // 20
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayGetLBound"},
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayGetUBound"}, //20
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "SafeArrayGetUBound"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SysAllocString"},
 	API_IMPORT{Module: OLEAUT32_DLL, Name: "SysFreeString"},
-	API_IMPORT{Module: OLEAUT32_DLL, Name: "LoadTypeLib"},
+	API_IMPORT{Module: OLEAUT32_DLL, Name: "LoadTypeLib"}, // 25
 
 	API_IMPORT{Module: WININET_DLL, Name: "InternetCrackUrlA"},
-	API_IMPORT{Module: WININET_DLL, Name: "InternetOpenA"}, //25
+	API_IMPORT{Module: WININET_DLL, Name: "InternetOpenA"},
 	API_IMPORT{Module: WININET_DLL, Name: "InternetConnectA"},
 	API_IMPORT{Module: WININET_DLL, Name: "InternetSetOptionA"},
-	API_IMPORT{Module: WININET_DLL, Name: "InternetReadFile"},
+	API_IMPORT{Module: WININET_DLL, Name: "InternetReadFile"}, // 30
 	API_IMPORT{Module: WININET_DLL, Name: "InternetCloseHandle"},
-	API_IMPORT{Module: WININET_DLL, Name: "HttpOpenRequestA"}, //30
+	API_IMPORT{Module: WININET_DLL, Name: "HttpOpenRequestA"},
 	API_IMPORT{Module: WININET_DLL, Name: "HttpSendRequestA"},
 	API_IMPORT{Module: WININET_DLL, Name: "HttpQueryInfoA"},
 
-	API_IMPORT{Module: MSCOREE_DLL, Name: "CorBindToRuntime"},
+	API_IMPORT{Module: MSCOREE_DLL, Name: "CorBindToRuntime"}, // 35
 	API_IMPORT{Module: MSCOREE_DLL, Name: "CLRCreateInstance"},
 
 	API_IMPORT{Module: OLE32_DLL, Name: "CoInitializeEx"},
 	API_IMPORT{Module: OLE32_DLL, Name: "CoCreateInstance"},
-	API_IMPORT{Module: OLE32_DLL, Name: "CoUninitialize"}, // 35
+	API_IMPORT{Module: OLE32_DLL, Name: "CoUninitialize"},
 
-	API_IMPORT{Module: NTDLL_DLL, Name: "RtlEqualUnicodeString"},
+	API_IMPORT{Module: NTDLL_DLL, Name: "RtlEqualUnicodeString"}, // 40
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlEqualString"},
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlUnicodeStringToAnsiString"},
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlInitUnicodeString"},
-	API_IMPORT{Module: NTDLL_DLL, Name: "RtlExitUserThread"}, //40
-	API_IMPORT{Module: NTDLL_DLL, Name: "RtlExitUserProcess"},
+	API_IMPORT{Module: NTDLL_DLL, Name: "RtlExitUserThread"},
+	API_IMPORT{Module: NTDLL_DLL, Name: "RtlExitUserProcess"}, // 45
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlCreateUnicodeString"},
 	API_IMPORT{Module: NTDLL_DLL, Name: "RtlGetCompressionWorkSpaceSize"},
-	API_IMPORT{Module: NTDLL_DLL, Name: "RtlDecompressBufferEx"},
+	API_IMPORT{Module: NTDLL_DLL, Name: "RtlDecompressBuffer"},
 	API_IMPORT{Module: NTDLL_DLL, Name: "NtContinue"},
+
+	API_IMPORT{Module: KERNEL32_DLL, Name: "AddVectoredExceptionHandler"}, // 50
+	API_IMPORT{Module: KERNEL32_DLL, Name: "RemoveVectoredExceptionHandler"},
 }
 
 // required to load .NET assemblies
