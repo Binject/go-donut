@@ -423,3 +423,16 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	log.Println("Leaving.")
 	return bc, nil
 }
+
+// DefaultConfig - returns a default donut config for x32+64, EXE, native binary
+func DefaultConfig() *DonutConfig {
+	return &DonutConfig{
+		Arch:     X84,
+		Type:     DONUT_MODULE_EXE,
+		InstType: DONUT_INSTANCE_PIC,
+		Entropy:  DONUT_ENTROPY_DEFAULT,
+		Compress: 1,
+		Format:   1,
+		Bypass:   3,
+	}
+}
