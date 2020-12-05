@@ -176,22 +176,18 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 	mod.Len = uint32(inputFile.Len())
 
 	if config.Parameters != "" {
-		skip := false
 		// if type is unmanaged EXE
 		if config.Type == DONUT_MODULE_EXE {
 			// and entropy is enabled
 			if config.Entropy != DONUT_ENTROPY_NONE {
 				// generate random name
 				copy(mod.Param[:], []byte(RandomString(DONUT_DOMAIN_LEN) + " ")[:])
+				copy(mod.Param[DONUT_DOMAIN_LEN+1:], []byte(config.Parameters)[:])
 			} else {
 				// else set to "AAAA "
 				copy(mod.Param[:], []byte("AAAAAAAA ")[:])
 				copy(mod.Param[9:], []byte(config.Parameters)[:])
-				skip = true
 			}
-		}
-		if !skip {
-			copy(mod.Param[:], []byte(config.Parameters)[:])
 		}
 	}
 
