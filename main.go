@@ -61,6 +61,7 @@ func main() {
 		Help: ".NET Mode, set true for .NET exe and DLL files (autodetect not implemented)"})
 	srcFile := parser.String("i", "in", &argparse.Options{Required: true,
 		Help: ".NET assembly, EXE, DLL, VBS, JS or XSL file to execute in-memory."})
+	verbose := parser.Flag("v", "verbose", &argparse.Options{Required: false, Help: "Show verbose output."})
 
 	if err := parser.Parse(os.Args); err != nil || *srcFile == "" {
 		log.Println(parser.Usage(err))
@@ -111,6 +112,7 @@ func main() {
 	config.ModuleName = *moduleName
 	config.Compress = uint32(*zFlag)
 	config.Format = uint32(*format)
+	config.Verbose = *verbose
 
 	if *tFlag {
 		config.Thread = 1
