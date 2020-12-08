@@ -74,6 +74,7 @@ func ShellcodeFromBytes(buf *bytes.Buffer, config *DonutConfig) (*bytes.Buffer, 
 		if config.Verbose {
 			log.Printf("Saving %s to disk.\n", config.ModuleName)
 		}
+
 		// save the module to disk using random name
 		instance.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})          // mystery padding
 		config.ModuleData.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0}) // mystery padding
@@ -186,22 +187,18 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 	mod.Len = uint32(inputFile.Len())
 
 	if config.Parameters != "" {
-		skip := false
 		// if type is unmanaged EXE
 		if config.Type == DONUT_MODULE_EXE {
 			// and entropy is enabled
 			if config.Entropy != DONUT_ENTROPY_NONE {
 				// generate random name
 				copy(mod.Param[:], []byte(RandomString(DONUT_DOMAIN_LEN) + " ")[:])
+				copy(mod.Param[DONUT_DOMAIN_LEN+1:], []byte(config.Parameters)[:])
 			} else {
 				// else set to "AAAA "
 				copy(mod.Param[:], []byte("AAAAAAAA ")[:])
 				copy(mod.Param[9:], []byte(config.Parameters)[:])
-				skip = true
 			}
-		}
-		if !skip {
-			copy(mod.Param[:], []byte(config.Parameters)[:])
 		}
 	}
 
@@ -318,6 +315,7 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		copy(inst.XCLSID_CorRuntimeHost[:], xCLSID_CorRuntimeHost[:])
 	} else if config.Type == DONUT_MODULE_VBS ||
 		config.Type == DONUT_MODULE_JS {
+
 		if config.Verbose {
 			log.Println("Copying GUID structures and DLL strings for loading VBS/JS")
 		}
