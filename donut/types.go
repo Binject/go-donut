@@ -106,6 +106,8 @@ type DonutConfig struct {
 
 	inst    *DonutInstance
 	instLen uint32
+
+	Verbose bool // Enable/Disable verbose output
 }
 
 type DonutModule struct {
