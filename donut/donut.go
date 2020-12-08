@@ -71,7 +71,10 @@ func ShellcodeFromBytes(buf *bytes.Buffer, config *DonutConfig) (*bytes.Buffer, 
 	}
 	// If the module will be stored on a remote server
 	if config.InstType == DONUT_INSTANCE_URL {
-		log.Printf("Saving %s to disk.\n", config.ModuleName)
+		if config.Verbose {
+			log.Printf("Saving %s to disk.\n", config.ModuleName)
+		}
+
 		// save the module to disk using random name
 		instance.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0})          // mystery padding
 		config.ModuleData.Write([]byte{0, 0, 0, 0, 0, 0, 0, 0}) // mystery padding
@@ -157,19 +160,27 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 		copy(mod.Domain[:], []byte(config.Domain)[:])
 
 		if config.Type == DONUT_MODULE_NET_DLL {
-			log.Println("Class:", config.Class)
+			if config.Verbose {
+				log.Println("Class:", config.Class)
+			}
 			copy(mod.Cls[:], []byte(config.Class)[:])
-			log.Println("Method:", config.Method)
+			if config.Verbose {
+				log.Println("Method:", config.Method)
+			}
 			copy(mod.Method[:], []byte(config.Method)[:])
 		}
 		// If no runtime specified in configuration, use default
 		if config.Runtime == "" {
 			config.Runtime = "v2.0.50727"
 		}
-		log.Println("Runtime:", config.Runtime)
+		if config.Verbose {
+			log.Println("Runtime:", config.Runtime)
+		}
 		copy(mod.Runtime[:], []byte(config.Runtime)[:])
 	} else if config.Type == DONUT_MODULE_DLL && config.Method != "" { // Unmanaged DLL? check for exported api
-		log.Println("DLL function:", config.Method)
+		if config.Verbose {
+			log.Println("DLL function:", config.Method)
+		}
 		copy(mod.Method[:], []byte(config.Method))
 	}
 	mod.Zlen = 0 // todo: support compression
@@ -213,12 +224,16 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	// if this is a PIC instance, add the size of module
 	// that will be appended to the end of structure
 	if config.InstType == DONUT_INSTANCE_PIC {
-		log.Printf("The size of module is %v bytes. Adding to size of instance.\n", modLen)
+		if config.Verbose {
+			log.Printf("The size of module is %v bytes. Adding to size of instance.\n", modLen)
+		}
 		instLen += modLen
 	}
 
 	if config.Entropy == DONUT_ENTROPY_DEFAULT {
-		log.Println("Generating random key for instance")
+		if config.Verbose {
+			log.Println("Generating random key for instance")
+		}
 		tk, err := GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
@@ -231,7 +246,9 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		}
 		copy(inst.KeyCtr[:], tk)
 
-		log.Println("Generating random key for module")
+		if config.Verbose {
+			log.Println("Generating random key for module")
+		}
 		tk, err = GenerateRandomBytes(16)
 		if err != nil {
 			return nil, err
@@ -244,11 +261,15 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		}
 		copy(inst.ModKeyCtr[:], tk)
 
-		log.Println("Generating random string to verify decryption")
+		if config.Verbose {
+			log.Println("Generating random string to verify decryption")
+		}
 		sbsig := RandomString(DONUT_SIG_LEN)
 		copy(inst.Sig[:], []byte(sbsig))
 
-		log.Println("Generating random IV for Maru hash")
+		if config.Verbose {
+			log.Println("Generating random IV for Maru hash")
+		}
 		iv, err := GenerateRandomBytes(MARU_IV_LEN)
 		if err != nil {
 			return nil, err
@@ -257,7 +278,9 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 
 		inst.Mac = Maru(inst.Sig[:], inst.Iv)
 	}
-	log.Println("Generating hashes for API using IV:", inst.Iv)
+	if config.Verbose {
+		log.Println("Generating hashes for API using IV:", inst.Iv)
+	}
 
 	for cnt, c := range api_imports {
 		// calculate hash for DLL string
@@ -267,10 +290,12 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		// xor with DLL hash and store in instance
 		inst.Hash[cnt] = Maru([]byte(c.Name), inst.Iv) ^ dllHash
 
-		log.Printf("Hash for %s : %s = %x\n",
-			c.Module,
-			c.Name,
-			inst.Hash[cnt])
+		if config.Verbose {
+			log.Printf("Hash for %s : %s = %x\n",
+				c.Module,
+				c.Name,
+				inst.Hash[cnt])
+		}
 	}
 	// save how many API to resolve
 	inst.ApiCount = uint32(len(api_imports))
@@ -279,7 +304,9 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	// if module is .NET assembly
 	if config.Type == DONUT_MODULE_NET_DLL ||
 		config.Type == DONUT_MODULE_NET_EXE {
-		log.Println("Copying GUID structures and DLL strings for loading .NET assemblies")
+		if config.Verbose {
+			log.Println("Copying GUID structures and DLL strings for loading .NET assemblies")
+		}
 		copy(inst.XIID_AppDomain[:], xIID_AppDomain[:])
 		copy(inst.XIID_ICLRMetaHost[:], xIID_ICLRMetaHost[:])
 		copy(inst.XCLSID_CLRMetaHost[:], xCLSID_CLRMetaHost[:])
@@ -288,7 +315,10 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 		copy(inst.XCLSID_CorRuntimeHost[:], xCLSID_CorRuntimeHost[:])
 	} else if config.Type == DONUT_MODULE_VBS ||
 		config.Type == DONUT_MODULE_JS {
-		log.Println("Copying GUID structures and DLL strings for loading VBS/JS")
+
+		if config.Verbose {
+			log.Println("Copying GUID structures and DLL strings for loading VBS/JS")
+		}
 
 		copy(inst.XIID_IUnknown[:], xIID_IUnknown[:])
 		copy(inst.XIID_IDispatch[:], xIID_IDispatch[:])
@@ -350,17 +380,23 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 				// generate a random name for module
 				// that will be saved to disk
 				config.ModuleName = RandomString(DONUT_MAX_MODNAME)
-				log.Println("Generated random name for module :", config.ModuleName)
+				if config.Verbose {
+					log.Println("Generated random name for module :", config.ModuleName)
+				}
 			} else {
 				config.ModuleName = "AAAAAAAA"
 			}
 		}
-		log.Println("Setting URL parameters")
+		if config.Verbose {
+			log.Println("Setting URL parameters")
+		}
 		// append module name
 		copy(inst.Url[:], config.URL+"/"+config.ModuleName)
 		// set the request verb
 		copy(inst.Req[:], "GET")
-		log.Println("Payload will attempt download from:", string(inst.Url[:]))
+		if config.Verbose {
+			log.Println("Payload will attempt download from:", string(inst.Url[:]))
+		}
 	}
 
 	inst.Mod_len = uint64(modLen) + 8 //todo: this 8 is from alignment I think?
@@ -369,7 +405,9 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	config.instLen = instLen
 
 	if config.InstType == DONUT_INSTANCE_URL && config.Entropy == DONUT_ENTROPY_DEFAULT {
-		log.Println("encrypting module for download")
+		if config.Verbose {
+			log.Println("encrypting module for download")
+		}
 		config.ModuleMac = Maru(inst.Sig[:], inst.Iv)
 		config.ModuleData = bytes.NewBuffer(Encrypt(
 			inst.ModKeyMk[:],
@@ -395,7 +433,9 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	if config.Entropy != DONUT_ENTROPY_DEFAULT {
 		return b, nil
 	}
-	log.Println("encrypting instance")
+	if config.Verbose {
+		log.Println("encrypting instance")
+	}
 	instData := b.Bytes()
 	offset := 4 + // Len uint32
 		CipherKeyLen + CipherBlockLen + // Instance Crypt
@@ -416,7 +456,9 @@ func CreateInstance(config *DonutConfig) (*bytes.Buffer, error) {
 	if _, err := bc.Write(encInstData); err != nil {         // encrypted body
 		log.Fatal(err)
 	}
-	log.Println("Leaving.")
+	if config.Verbose {
+		log.Println("Leaving.")
+	}
 	return bc, nil
 }
 
