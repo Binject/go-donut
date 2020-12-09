@@ -199,6 +199,8 @@ func CreateModule(config *DonutConfig, inputFile *bytes.Buffer) error {
 				copy(mod.Param[:], []byte("AAAAAAAA ")[:])
 				copy(mod.Param[9:], []byte(config.Parameters)[:])
 			}
+		} else {
+			copy(mod.Param[:], []byte(config.Parameters)[:])
 		}
 	}
 
