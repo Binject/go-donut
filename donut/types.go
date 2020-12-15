@@ -81,8 +81,7 @@ type DonutConfig struct {
 	InstType   InstanceType
 	Parameters string // separated by , or ;
 
-	Entropy    uint32
-	DotNetMode bool
+	Entropy uint32
 
 	// new in 0.9.3
 	Thread   uint32

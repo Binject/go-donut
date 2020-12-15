@@ -7,6 +7,8 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+
+	"github.com/Binject/debug/pe"
 )
 
 /*
@@ -29,25 +31,40 @@ func ShellcodeFromURL(fileURL string, config *DonutConfig) (*bytes.Buffer, error
 	return ShellcodeFromBytes(buf, config)
 }
 
+// DetectDotNet - returns true if a .NET assembly. 2nd return value is detected version string.
+func DetectDotNet(filename string) (bool, string) {
+	// auto-detect .NET assemblies and version
+	pefile, err := pe.Open(filename)
+	if err != nil {
+		return false, ""
+	}
+	defer pefile.Close()
+	return pefile.IsManaged(), pefile.NetCLRVersion()
+}
+
 // ShellcodeFromFile - Loads PE from file, makes shellcode
 func ShellcodeFromFile(filename string, config *DonutConfig) (*bytes.Buffer, error) {
 
-	b, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
 	switch strings.ToLower(filepath.Ext(filename)) {
 	case ".exe":
-		if config.DotNetMode {
+		dotNetMode, dotNetVersion := DetectDotNet(filename)
+		if dotNetMode {
 			config.Type = DONUT_MODULE_NET_EXE
 		} else {
 			config.Type = DONUT_MODULE_EXE
 		}
+		if dotNetVersion != "" && config.Runtime == "" {
+			config.Runtime = dotNetVersion
+		}
 	case ".dll":
-		if config.DotNetMode {
+		dotNetMode, dotNetVersion := DetectDotNet(filename)
+		if dotNetMode {
 			config.Type = DONUT_MODULE_NET_DLL
 		} else {
 			config.Type = DONUT_MODULE_DLL
+		}
+		if dotNetVersion != "" && config.Runtime == "" {
+			config.Runtime = dotNetVersion
 		}
 	case ".xsl":
 		config.Type = DONUT_MODULE_XSL
@@ -55,6 +72,11 @@ func ShellcodeFromFile(filename string, config *DonutConfig) (*bytes.Buffer, err
 		config.Type = DONUT_MODULE_JS
 	case ".vbs":
 		config.Type = DONUT_MODULE_VBS
+	}
+
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
 	}
 	return ShellcodeFromBytes(bytes.NewBuffer(b), config)
 }

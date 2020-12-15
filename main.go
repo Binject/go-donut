@@ -50,19 +50,17 @@ func main() {
 	wFlag := parser.Flag("w", "unicode", &argparse.Options{Required: false,
 		Help: "Command line is passed to unmanaged DLL function in UNICODE format. (default is ANSI)"})
 	runtime := parser.String("r", "runtime", &argparse.Options{Required: false,
-		Help: "CLR runtime version."})
+		Help: "CLR runtime version. This will override the auto-detected version."})
 	tFlag := parser.Flag("t", "thread", &argparse.Options{Required: false,
 		Help: "Create new thread for entrypoint of unmanaged EXE."})
 	zFlag := parser.Int("z", "compress", &argparse.Options{Required: false, Default: 1,
 		Help: "Pack/Compress file. 1=disable, 2=LZNT1, 3=Xpress, 4=Xpress Huffman"})
 
 	// go-donut only flags
-	dotNet := parser.Flag("", "dotnet", &argparse.Options{Required: false,
-		Help: ".NET Mode, set true for .NET exe and DLL files (autodetect not implemented)"})
 	srcFile := parser.String("i", "in", &argparse.Options{Required: true,
 		Help: ".NET assembly, EXE, DLL, VBS, JS or XSL file to execute in-memory."})
 
-  verbose := parser.Flag("v", "verbose", &argparse.Options{Required: false, Help: "Show verbose output."})
+	verbose := parser.Flag("v", "verbose", &argparse.Options{Required: false, Help: "Show verbose output."})
 
 	if err := parser.Parse(os.Args); err != nil || *srcFile == "" {
 		log.Println(parser.Usage(err))
@@ -102,7 +100,6 @@ func main() {
 		config.InstType = donut.DONUT_INSTANCE_URL
 	}
 
-	config.DotNetMode = *dotNet
 	config.Parameters = *params
 	config.Runtime = *runtime
 	config.URL = *url
